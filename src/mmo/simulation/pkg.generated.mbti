@@ -1,0 +1,48 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mizchi/prdt/mmo/simulation"
+
+import {
+  "mizchi/prdt",
+  "mizchi/prdt/mmo",
+  "mizchi/prdt/runtime",
+}
+
+// Values
+pub fn generate_scenario(Int) -> Scenario raise
+
+pub let players : Array[String]
+
+pub fn random_command(@runtime.Rng, Int) -> @mmo.GameCommand
+
+pub fn random_scenario_command(@runtime.Rng) -> @mmo.GameCommand
+
+pub fn random_world(@runtime.Rng) -> @mmo.World
+
+pub fn run_mmo_quorum_simulation(seed~ : Int, steps? : Int, replica_count? : Int, equivocators? : Array[Int], compaction_retain? : Int) -> @runtime.SimulationReport raise
+
+pub fn run_mmo_simulation(seed~ : Int, steps? : Int, replica_count? : Int, compaction_retain? : Int, late_policy? : @runtime.LateCommandPolicy) -> @runtime.SimulationReport raise @prdt.ProtocolError
+
+pub let scenario_players : Array[String]
+
+pub fn simulation_world() -> @mmo.World
+
+// Errors
+
+// Types and methods
+pub struct Scenario {
+  protocol : @prdt.Protocol[@mmo.World, @mmo.GameCommand, @mmo.GameEvent, @mmo.GameRejection]
+  authority : @prdt.ClosureAuthority[@mmo.GameCommand]
+  world : @mmo.World
+  envelopes : Array[@prdt.Envelope[@mmo.GameCommand]]
+  certificates : Array[@prdt.ClosureCertificate]
+  deltas : Array[@prdt.Delta[@mmo.GameCommand]]
+  full : @prdt.State[@mmo.World, @mmo.GameCommand, @mmo.GameEvent, @mmo.GameRejection]
+}
+pub fn Scenario::delivery_schedule(Self, @runtime.Rng) -> Array[@prdt.Delta[@mmo.GameCommand]]
+pub fn Scenario::fold(Self, Array[@prdt.Delta[@mmo.GameCommand]]) -> @prdt.State[@mmo.World, @mmo.GameCommand, @mmo.GameEvent, @mmo.GameRejection] raise
+pub fn Scenario::random_reachable(Self, @runtime.Rng) -> @prdt.State[@mmo.World, @mmo.GameCommand, @mmo.GameEvent, @mmo.GameRejection] raise
+
+// Type aliases
+
+// Traits
+

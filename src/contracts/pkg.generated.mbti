@@ -1,0 +1,66 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mizchi/prdt/contracts"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn accepted_never_becomes_rejected(DecisionKind) -> Unit
+
+pub fn compaction_drop(Int, Int) -> Int
+
+pub fn compaction_drop_is_bounded(Int, Int, Int) -> Unit
+
+pub fn compaction_keeps_the_retention_window(Int, Int, Int) -> Unit
+
+pub fn compaction_never_shrinks_the_finalized_prefix(Int, Int, Int, Int) -> Unit
+
+pub fn compaction_within_window_is_noop(Int, Int, Int) -> Unit
+
+pub fn conflicting_votes_never_count(VoteSlotKind) -> Unit
+
+pub fn decision_kind_less_or_equal(DecisionKind, DecisionKind) -> Bool
+
+pub fn decision_order_is_antisymmetric(DecisionKind, DecisionKind) -> Unit
+
+pub fn decision_order_is_reflexive(DecisionKind) -> Unit
+
+pub fn decision_order_is_transitive(DecisionKind, DecisionKind, DecisionKind) -> Unit
+
+pub fn equivocation_is_absorbing(VoteSlotKind, Bool, VoteSlotKind) -> Unit
+
+pub fn final_decisions_never_change(DecisionKind, DecisionKind) -> Unit
+
+pub fn majority_is_unique(Int, Int, Int, Int) -> Unit
+
+pub fn merge_vote_slot_kind(VoteSlotKind, VoteSlotKind, Bool) -> VoteSlotKind
+
+pub fn quorum_threshold_valid(Int, Int) -> Bool
+
+pub fn two_quorums_intersect(Int, Int, Int, Int) -> Unit
+
+pub fn vote_slot_merge_is_commutative(VoteSlotKind, VoteSlotKind, Bool, VoteSlotKind, VoteSlotKind) -> Unit
+
+pub fn vote_slot_merge_is_idempotent(VoteSlotKind, VoteSlotKind) -> Unit
+
+// Errors
+
+// Types and methods
+pub(all) enum DecisionKind {
+  KindPending
+  KindAccepted
+  KindRejected
+  KindLate
+} derive(Eq, @debug.Debug)
+
+pub(all) enum VoteSlotKind {
+  KindNoVote
+  KindVoted
+  KindEquivocated
+} derive(Eq, @debug.Debug)
+
+// Type aliases
+
+// Traits
+

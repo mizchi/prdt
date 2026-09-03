@@ -1,0 +1,542 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mizchi/prdt"
+
+import {
+  "mizchi/prdt/contracts",
+  "moonbitlang/core/debug",
+  "moonbitlang/core/json",
+}
+
+// Values
+pub fn assemble_base_certificate(BaseVoteState, Int, QuorumRoster) -> BaseCertificate?
+
+pub fn assemble_quorum_certificate(VoteState, Int, QuorumRoster) -> ClosureCertificate?
+
+pub let base_message_domain : String
+
+pub fn bytes_from_lower_hex(String) -> Bytes?
+
+pub fn bytes_to_lower_hex(Bytes) -> String
+
+pub fn canonical_json(Json) -> Json
+
+pub fn[C] canonical_order((C) -> Int) -> CommandOrder[C]
+
+pub fn canonicalize(Json) -> String
+
+pub fn certificate_shape_ok(&Hasher, ClosureCertificate) -> Bool
+
+pub fn closure_decisions_equivalent(ClosureDecision, ClosureDecision) -> Bool
+
+pub let closure_message_domain : String
+
+pub fn[E : Eq, R : Eq] command_decision_less_or_equal(CommandDecision[E, R], CommandDecision[E, R]) -> Bool
+
+pub fn command_id(String, Int) -> String
+
+pub fn[E : Eq, R : Eq] decision_less_or_equal(Decision[E, R], Decision[E, R]) -> Bool
+
+pub fn hash_command_ids(&Hasher, Array[String]) -> String
+
+pub fn hash_json(&Hasher, Json) -> String
+
+pub fn[T : ToJson] hash_value(&Hasher, T) -> String
+
+pub fn[R] is_prefix_of(CommittedLog[R], CommittedLog[R]) -> Bool
+
+pub fn is_valid_tick(Int) -> Bool
+
+pub fn json_field(Map[String, Json], String, @json.JsonPath) -> Json raise @json.JsonDecodeError
+
+pub fn[L : JoinSemilattice] lattice_law_violations(L, L, L) -> Array[String] raise ProtocolError
+
+pub fn[L : JoinSemilattice] less_or_equal(L, L) -> Bool raise ProtocolError
+
+pub fn[R] logs_are_prefix_compatible(CommittedLog[R], CommittedLog[R]) -> Bool
+
+pub fn merge_base_vote_slots(BaseVoteSlot, BaseVoteSlot) -> BaseVoteSlot
+
+pub fn merge_closure_decisions(ClosureDecision, ClosureDecision) -> ClosureDecision raise ProtocolError
+
+pub fn merge_voter_slots(VoterSlot, VoterSlot) -> VoterSlot
+
+pub fn[S : ToJson, C, E, R] resolve_batch(Int, S, Array[Envelope[C]], Domain[S, C, E, R], CommandOrder[C], &Hasher) -> ResolvedBatch[S, C, E, R] raise BatchError
+
+pub let snapshot_version : Int
+
+pub fn[C] sort_commands(Array[Envelope[C]], CommandOrder[C]) -> Array[Envelope[C]]
+
+// Errors
+pub(all) suberror BatchError {
+  BatchTickMismatch(Int, Int, String)
+  DuplicateCommandId(String)
+} derive(Eq, @debug.Debug)
+
+pub(all) suberror ProtocolError {
+  ConflictingProposal(String)
+  ConflictingClosure(Int)
+  PrefixConflict(Int)
+  InvalidCertificate(Int)
+  MalformedCertificate(Int, String)
+  ChainMismatch(Int)
+  OrderMismatch(Int)
+  InvalidTick(String)
+  SnapshotMismatch(String)
+  ConflictingBase(Int)
+  UnauthenticatedBase(Int)
+} derive(Eq, @debug.Debug)
+pub fn ProtocolError::kind(Self) -> String
+
+pub(all) suberror QuorumConfigError {
+  ThresholdNotPositive(Int)
+  ThresholdExceedsRoster(Int, Int)
+  ThresholdNotMajority(Int, Int)
+  DuplicateMember(String)
+} derive(Eq, @debug.Debug)
+
+// Types and methods
+pub(all) struct Attestation {
+  signer : PublicKey
+  signature : Signature
+} derive(Eq, @debug.Debug)
+pub impl ToJson for Attestation
+pub impl @json.FromJson for Attestation
+
+pub(all) struct Base[S] {
+  next_tick : Int
+  decision_hash : String
+  state : S
+} derive(Eq, @debug.Debug)
+pub impl[S : ToJson] ToJson for Base[S]
+pub impl[S : @json.FromJson] @json.FromJson for Base[S]
+
+pub(all) struct BaseCertificate {
+  next_tick : Int
+  decision_hash : String
+  state_hash : String
+  attestations : Array[Attestation]
+} derive(Eq, @debug.Debug)
+pub fn BaseCertificate::payload_json(Self) -> Json
+pub fn BaseCertificate::same_base(Self, Self) -> Bool
+pub impl ToJson for BaseCertificate
+pub impl @json.FromJson for BaseCertificate
+
+pub(all) struct BasePayload {
+  next_tick : Int
+  decision_hash : String
+  state_hash : String
+} derive(Eq, @debug.Debug)
+pub fn BasePayload::digest(Self, &Hasher) -> Digest
+pub fn BasePayload::message(Self) -> String
+pub fn BasePayload::of(BaseCertificate) -> Self
+
+pub(all) struct BaseVote {
+  voter : PublicKey
+  next_tick : Int
+  decision_hash : String
+  state_hash : String
+  signature : Signature
+} derive(Eq, @debug.Debug)
+pub fn BaseVote::payload(Self) -> BasePayload
+pub impl ToJson for BaseVote
+pub impl @json.FromJson for BaseVote
+
+pub(all) enum BaseVoteSlot {
+  BaseVoted(BaseVote)
+  BaseEquivocated
+} derive(Eq, @debug.Debug)
+
+pub struct BaseVoteState {
+  by_tick : Map[Int, Map[String, BaseVoteSlot]]
+}
+pub fn BaseVoteState::add(Self, BaseVote) -> Self
+pub fn BaseVoteState::empty() -> Self
+pub fn BaseVoteState::prune_below(Self, Int) -> Self
+
+pub(all) struct Catchup[S, C] {
+  base : Base[S]
+  certificate : BaseCertificate?
+  delta : Delta[C]
+}
+pub impl[S : ToJson, C : ToJson] ToJson for Catchup[S, C]
+pub impl[S : @json.FromJson, C : @json.FromJson] @json.FromJson for Catchup[S, C]
+
+pub struct ClosureAuthority[C] {
+  hasher : &Hasher
+  signer : &Signer
+  order : CommandOrder[C]
+}
+pub fn[C] ClosureAuthority::certify_base(Self[C], Int, String, String) -> BaseCertificate
+pub fn[C] ClosureAuthority::close(Self[C], Int, String, Array[Envelope[C]]) -> ClosureCertificate raise BatchError
+pub fn[C] ClosureAuthority::new(&Hasher, &Signer, CommandOrder[C]) -> Self[C]
+
+pub(all) struct ClosureCertificate {
+  tick : Int
+  parent_decision_hash : String
+  ordered_command_ids : Array[String]
+  ordered_commands_hash : String
+  attestations : Array[Attestation]
+} derive(Eq, @debug.Debug)
+pub fn ClosureCertificate::payload_json(Self) -> Json
+pub fn ClosureCertificate::same_decision(Self, Self) -> Bool
+pub impl ToJson for ClosureCertificate
+pub impl @json.FromJson for ClosureCertificate
+
+pub(all) enum ClosureDecision {
+  ClosurePending
+  Closed(ClosureCertificate)
+} derive(Eq, @debug.Debug)
+pub impl JoinSemilattice for ClosureDecision
+
+pub struct ClosureMap {
+  by_tick : Map[Int, ClosureDecision]
+}
+pub fn ClosureMap::closed_ticks_from(Self, Int) -> Array[Int]
+pub fn ClosureMap::empty() -> Self
+pub fn ClosureMap::equals(Self, Self) -> Bool
+pub fn ClosureMap::for_tick(Self, Int) -> ClosureDecision
+pub fn ClosureMap::from_certificates(Array[ClosureCertificate]) -> Self raise ProtocolError
+pub fn ClosureMap::list(Self) -> Array[ClosureCertificate]
+pub fn ClosureMap::merge(Self, Self) -> Self raise ProtocolError
+pub fn ClosureMap::prune_below(Self, Int) -> Self
+pub impl JoinSemilattice for ClosureMap
+
+pub(all) struct ClosurePayload {
+  tick : Int
+  parent_decision_hash : String
+  ordered_commands_hash : String
+} derive(Eq, @debug.Debug)
+pub fn ClosurePayload::digest(Self, &Hasher) -> Digest
+pub fn ClosurePayload::message(Self) -> String
+pub fn ClosurePayload::of(ClosureCertificate) -> Self
+
+pub(all) struct ClosureVote {
+  voter : PublicKey
+  tick : Int
+  parent_decision_hash : String
+  ordered_command_ids : Array[String]
+  ordered_commands_hash : String
+  signature : Signature
+} derive(Eq, @debug.Debug)
+pub fn ClosureVote::payload(Self) -> ClosurePayload
+pub impl ToJson for ClosureVote
+pub impl @json.FromJson for ClosureVote
+
+pub(all) enum CommandDecision[E, R] {
+  DecisionPending
+  DecisionAccepted(Int, E)
+  DecisionRejected(Int, R)
+  DecisionLate(Int)
+} derive(Eq, @debug.Debug)
+pub fn[E, R] CommandDecision::kind(Self[E, R]) -> @contracts.DecisionKind
+
+pub struct CommandOrder[C] {
+  compare : (Envelope[C], Envelope[C]) -> Int
+}
+pub fn[C] CommandOrder::new((Envelope[C], Envelope[C]) -> Int) -> Self[C]
+
+pub(all) struct CommittedBatch[R] {
+  tick : Int
+  parent_decision_hash : String
+  ordered_commands_hash : String
+  result_hash : String
+  result : R
+} derive(Eq, @debug.Debug)
+pub impl[R : ToJson] ToJson for CommittedBatch[R]
+pub impl[R : @json.FromJson] @json.FromJson for CommittedBatch[R]
+
+pub struct CommittedLog[R] {
+  batches : Array[CommittedBatch[R]]
+}
+pub fn[R] CommittedLog::append(Self[R], CommittedBatch[R]) -> Self[R]
+pub fn[R] CommittedLog::batches(Self[R]) -> Array[CommittedBatch[R]]
+pub fn[R] CommittedLog::empty() -> Self[R]
+pub fn[R] CommittedLog::equals(Self[R], Self[R]) -> Bool
+pub fn[R] CommittedLog::head_decision_hash(Self[R], String) -> String
+pub fn[R] CommittedLog::last(Self[R]) -> CommittedBatch[R]?
+pub fn[R] CommittedLog::length(Self[R]) -> Int
+pub fn[R] CommittedLog::merge(Self[R], Self[R]) -> Self[R] raise ProtocolError
+pub fn[R] CommittedLog::result_hashes(Self[R]) -> Array[String]
+pub impl[R] JoinSemilattice for CommittedLog[R]
+
+pub struct Decision[E, R] {
+  commands : Map[String, CommandDecision[E, R]]
+  committed_ticks : Array[Int]
+  head_decision_hash : String
+}
+pub fn[E, R] Decision::command_ids(Self[E, R]) -> Array[String]
+pub fn[E, R] Decision::committed_ticks(Self[E, R]) -> Array[Int]
+pub fn[E, R] Decision::head_decision_hash(Self[E, R]) -> String
+pub fn[E, R] Decision::of(Self[E, R], String) -> CommandDecision[E, R]
+
+pub(all) struct Delta[C] {
+  proposals : Array[Envelope[C]]
+  closures : Array[ClosureCertificate]
+  base_certificates : Array[BaseCertificate]
+} derive(Eq, @debug.Debug)
+pub fn[C] Delta::empty() -> Self[C]
+pub impl[C : ToJson] ToJson for Delta[C]
+pub impl[C : @json.FromJson] @json.FromJson for Delta[C]
+
+pub(all) struct Digest(String) derive(Compare, Eq, Hash, @debug.Debug)
+
+pub(all) struct Domain[S, C, E, R] {
+  initial_state : () -> S
+  validate : (S, C) -> Validation[E, R]
+  apply : (S, E) -> S
+}
+
+pub(all) struct Envelope[C] {
+  id : String
+  tick : Int
+  submitted_by : String
+  local_sequence : Int
+  command : C
+} derive(Eq, @debug.Debug)
+pub impl[C : ToJson] ToJson for Envelope[C]
+pub impl[C : @json.FromJson] @json.FromJson for Envelope[C]
+
+pub struct KeyedVerifier {
+  verifiers : Map[String, &Verifier]
+}
+pub fn KeyedVerifier::new() -> Self
+pub fn KeyedVerifier::register(Self, PublicKey, &Verifier) -> Unit
+pub impl Verifier for KeyedVerifier
+
+pub(all) struct KnowledgeDigest {
+  base_next_tick : Int
+  next_tick : Int
+  known_ids : Array[String]
+  closed_ticks : Array[Int]
+  certified_ticks : Array[Int]
+} derive(Eq, @debug.Debug)
+pub impl ToJson for KnowledgeDigest
+pub impl @json.FromJson for KnowledgeDigest
+
+pub(all) struct Proposal[C] {
+  envelope : Envelope[C]
+  delta : Delta[C]
+} derive(Eq, @debug.Debug)
+
+pub struct ProposalState[C] {
+  by_tick : Map[Int, Map[String, Envelope[C]]]
+}
+pub fn[C : Eq] ProposalState::add(Self[C], Envelope[C]) -> Self[C] raise ProtocolError
+pub fn[C] ProposalState::count(Self[C]) -> Int
+pub fn[C] ProposalState::empty() -> Self[C]
+pub fn[C : Eq] ProposalState::equals(Self[C], Self[C]) -> Bool
+pub fn[C] ProposalState::for_tick(Self[C], Int) -> Map[String, Envelope[C]]
+pub fn[C] ProposalState::ids_from(Self[C], Int) -> Array[String]
+pub fn[C] ProposalState::list(Self[C]) -> Array[Envelope[C]]
+pub fn[C : Eq] ProposalState::merge(Self[C], Self[C]) -> Self[C] raise ProtocolError
+pub fn[C] ProposalState::prune_below(Self[C], Int) -> Self[C]
+pub fn[C] ProposalState::singleton(Envelope[C]) -> Self[C]
+pub fn[C] ProposalState::ticks(Self[C]) -> Array[Int]
+pub impl[C : Eq] JoinSemilattice for ProposalState[C]
+
+pub struct Protocol[S, C, E, R] {
+  domain : Domain[S, C, E, R]
+  order : CommandOrder[C]
+  finalizer : &Finalizer
+  hasher : &Hasher
+  genesis_tick : Int
+  genesis_hash : String
+}
+pub fn[S : ToJson, C : Eq, E : ToJson, R : ToJson] Protocol::apply_catchup(Self[S, C, E, R], State[S, C, E, R], Catchup[S, C]) -> State[S, C, E, R] raise ProtocolError
+pub fn[S : ToJson, C : Eq, E : ToJson, R : ToJson] Protocol::apply_delta(Self[S, C, E, R], State[S, C, E, R], Delta[C]) -> State[S, C, E, R] raise ProtocolError
+pub fn[S, C, E, R] Protocol::catchup_since(Self[S, C, E, R], State[S, C, E, R], KnowledgeDigest) -> Catchup[S, C]
+pub fn[S, C, E, R] Protocol::compact(Self[S, C, E, R], State[S, C, E, R], retain_ticks~ : Int) -> State[S, C, E, R] raise ProtocolError
+pub fn[S, C, E, R] Protocol::decision(Self[S, C, E, R], State[S, C, E, R]) -> Decision[E, R]
+pub fn[S, C, E, R] Protocol::delta_of(Self[S, C, E, R], State[S, C, E, R]) -> Delta[C]
+pub fn[S, C, E, R] Protocol::delta_since(Self[S, C, E, R], State[S, C, E, R], KnowledgeDigest) -> Delta[C]
+pub fn[S, C, E, R] Protocol::digest(Self[S, C, E, R], State[S, C, E, R]) -> KnowledgeDigest
+pub fn[S, C, E, R] Protocol::domain(Self[S, C, E, R]) -> Domain[S, C, E, R]
+pub fn[S, C, E, R] Protocol::domain_state(Self[S, C, E, R], State[S, C, E, R]) -> S
+pub fn[S, C, E, R] Protocol::genesis_hash(Self[S, C, E, R]) -> String
+pub fn[S, C, E, R] Protocol::genesis_tick(Self[S, C, E, R]) -> Int
+pub fn[S, C, E, R] Protocol::hasher(Self[S, C, E, R]) -> &Hasher
+pub fn[S, C, E, R] Protocol::initial(Self[S, C, E, R]) -> State[S, C, E, R]
+pub fn[S : ToJson, C : Eq, E : ToJson, R : ToJson] Protocol::join(Self[S, C, E, R], State[S, C, E, R], State[S, C, E, R]) -> State[S, C, E, R] raise ProtocolError
+pub fn[S : ToJson, C : Eq, E : ToJson, R : ToJson] Protocol::lattice_law_violations(Self[S, C, E, R], State[S, C, E, R], State[S, C, E, R], State[S, C, E, R]) -> Array[String] raise ProtocolError
+pub fn[S : ToJson, C, E, R] Protocol::new(Domain[S, C, E, R], CommandOrder[C], &Finalizer, &Hasher, genesis_tick? : Int) -> Self[S, C, E, R]
+pub fn[S, C, E, R] Protocol::next_tick(Self[S, C, E, R], State[S, C, E, R]) -> Int
+pub fn[S, C, E, R] Protocol::order(Self[S, C, E, R]) -> CommandOrder[C]
+pub fn[S : ToJson + @json.FromJson, C : Eq + @json.FromJson, E : ToJson + @json.FromJson, R : ToJson + @json.FromJson] Protocol::restore(Self[S, C, E, R], Json) -> State[S, C, E, R] raise ProtocolError
+pub fn[S : ToJson, C : ToJson, E : ToJson, R : ToJson] Protocol::snapshot(Self[S, C, E, R], State[S, C, E, R]) -> Json
+pub fn[S, C : ToJson, E, R] Protocol::state_hash(Self[S, C, E, R], State[S, C, E, R]) -> String
+pub fn[S, C : Eq, E, R] Protocol::states_equal(Self[S, C, E, R], State[S, C, E, R], State[S, C, E, R]) -> Bool
+
+pub(all) struct PublicKey(String) derive(Eq, Hash, @debug.Debug)
+
+pub struct QuorumFinalizer {
+  hasher : &Hasher
+  verifier : &Verifier
+  roster : QuorumRoster
+}
+pub fn QuorumFinalizer::new(&Hasher, &Verifier, QuorumRoster) -> Self
+pub fn QuorumFinalizer::roster(Self) -> QuorumRoster
+pub fn QuorumFinalizer::verify_base_vote(Self, BaseVote) -> Bool
+pub fn QuorumFinalizer::verify_vote(Self, ClosureVote) -> Bool
+pub impl Finalizer for QuorumFinalizer
+
+pub struct QuorumRoster {
+  members : Array[PublicKey]
+  threshold : Int
+}
+pub fn QuorumRoster::members(Self) -> Array[PublicKey]
+pub fn QuorumRoster::new(Array[PublicKey], Int) -> Self raise QuorumConfigError
+pub fn QuorumRoster::threshold(Self) -> Int
+
+pub struct ReplicatedDomain[S, C, E, R] {
+  protocol : Protocol[S, C, E, R]
+  replica_id : String
+  mut state : State[S, C, E, R]
+  mut next_local_sequence : Int
+}
+pub fn[S : ToJson, C : Eq, E : ToJson, R : ToJson] ReplicatedDomain::apply_catchup(Self[S, C, E, R], Catchup[S, C]) -> Unit raise ProtocolError
+pub fn[S, C, E, R] ReplicatedDomain::catchup_since(Self[S, C, E, R], KnowledgeDigest) -> Catchup[S, C]
+pub fn[S : ToJson, C : Eq, E : ToJson, R : ToJson] ReplicatedDomain::close_tick(Self[S, C, E, R], ClosureCertificate) -> Unit raise ProtocolError
+pub fn[S, C, E, R] ReplicatedDomain::compact(Self[S, C, E, R], retain_ticks~ : Int) -> Unit raise ProtocolError
+pub fn[S, C, E, R] ReplicatedDomain::decision(Self[S, C, E, R]) -> Decision[E, R]
+pub fn[S, C, E, R] ReplicatedDomain::delta(Self[S, C, E, R]) -> Delta[C]
+pub fn[S, C, E, R] ReplicatedDomain::delta_since(Self[S, C, E, R], KnowledgeDigest) -> Delta[C]
+pub fn[S, C, E, R] ReplicatedDomain::digest(Self[S, C, E, R]) -> KnowledgeDigest
+pub fn[S, C, E, R] ReplicatedDomain::domain_state(Self[S, C, E, R]) -> S
+pub fn[S : ToJson, C : Eq, E : ToJson, R : ToJson] ReplicatedDomain::merge(Self[S, C, E, R], Delta[C]) -> Unit raise ProtocolError
+pub fn[S, C, E, R] ReplicatedDomain::new(Protocol[S, C, E, R], String) -> Self[S, C, E, R]
+pub fn[S, C, E, R] ReplicatedDomain::next_local_sequence(Self[S, C, E, R]) -> Int
+pub fn[S, C, E, R] ReplicatedDomain::next_tick(Self[S, C, E, R]) -> Int
+pub fn[S : ToJson, C : Eq, E : ToJson, R : ToJson] ReplicatedDomain::propose(Self[S, C, E, R], Int, C) -> Proposal[C] raise ProtocolError
+pub fn[S, C, E, R] ReplicatedDomain::protocol(Self[S, C, E, R]) -> Protocol[S, C, E, R]
+pub fn[S, C, E, R] ReplicatedDomain::replica_id(Self[S, C, E, R]) -> String
+pub fn[S : ToJson + @json.FromJson, C : Eq + @json.FromJson, E : ToJson + @json.FromJson, R : ToJson + @json.FromJson] ReplicatedDomain::restore(Protocol[S, C, E, R], Json) -> Self[S, C, E, R] raise ProtocolError
+pub fn[S : ToJson, C : ToJson, E : ToJson, R : ToJson] ReplicatedDomain::snapshot(Self[S, C, E, R]) -> Json
+pub fn[S, C, E, R] ReplicatedDomain::state(Self[S, C, E, R]) -> State[S, C, E, R]
+pub fn[S, C : ToJson, E, R] ReplicatedDomain::state_hash(Self[S, C, E, R]) -> String
+
+pub(all) struct ResolvedBatch[S, C, E, R] {
+  tick : Int
+  previous_state_hash : String
+  ordered_command_hash : String
+  results : Array[ResolvedCommand[C, E, R]]
+  resulting_state : S
+  resulting_state_hash : String
+} derive(Eq, @debug.Debug)
+pub impl[S : ToJson, C : ToJson, E : ToJson, R : ToJson] ToJson for ResolvedBatch[S, C, E, R]
+pub impl[S : @json.FromJson, C : @json.FromJson, E : @json.FromJson, R : @json.FromJson] @json.FromJson for ResolvedBatch[S, C, E, R]
+
+pub(all) struct ResolvedCommand[C, E, R] {
+  envelope : Envelope[C]
+  verdict : Verdict[E, R]
+} derive(Eq, @debug.Debug)
+pub impl[C : ToJson, E : ToJson, R : ToJson] ToJson for ResolvedCommand[C, E, R]
+pub impl[C : @json.FromJson, E : @json.FromJson, R : @json.FromJson] @json.FromJson for ResolvedCommand[C, E, R]
+
+pub struct Sha256Hasher {
+}
+pub fn Sha256Hasher::new() -> Self
+pub impl Hasher for Sha256Hasher
+
+pub struct SharedSecretAuthenticator {
+  key : Bytes
+  public_key : PublicKey
+}
+pub fn SharedSecretAuthenticator::new(String, String) -> Self
+pub impl Signer for SharedSecretAuthenticator
+pub impl Verifier for SharedSecretAuthenticator
+
+pub(all) struct Signature(String) derive(Eq, @debug.Debug)
+
+pub struct SingleAuthorityFinalizer {
+  hasher : &Hasher
+  verifier : &Verifier
+  authority : PublicKey
+}
+pub fn SingleAuthorityFinalizer::new(&Hasher, &Verifier, PublicKey) -> Self
+pub impl Finalizer for SingleAuthorityFinalizer
+
+pub struct State[S, C, E, R] {
+  base : Base[S]
+  base_certificate : BaseCertificate?
+  certified_bases : Map[Int, BaseCertificate]
+  proposals : ProposalState[C]
+  closures : ClosureMap
+  committed : CommittedLog[ResolvedBatch[S, C, E, R]]
+}
+pub fn[S, C, E, R] State::base(Self[S, C, E, R]) -> Base[S]
+pub fn[S, C, E, R] State::base_certificate(Self[S, C, E, R]) -> BaseCertificate?
+pub fn[S, C, E, R] State::certified_bases(Self[S, C, E, R]) -> Array[BaseCertificate]
+pub fn[S, C, E, R] State::closures(Self[S, C, E, R]) -> ClosureMap
+pub fn[S, C, E, R] State::committed(Self[S, C, E, R]) -> CommittedLog[ResolvedBatch[S, C, E, R]]
+pub fn[S, C, E, R] State::proposals(Self[S, C, E, R]) -> ProposalState[C]
+
+pub(all) enum Validation[E, R] {
+  Accept(E)
+  Reject(R)
+} derive(Eq, @debug.Debug)
+
+pub(all) enum Verdict[E, R] {
+  Accepted(E)
+  Rejected(R)
+} derive(Eq, @debug.Debug)
+pub impl[E : ToJson, R : ToJson] ToJson for Verdict[E, R]
+pub impl[E : @json.FromJson, R : @json.FromJson] @json.FromJson for Verdict[E, R]
+
+pub struct VoteState {
+  by_tick : Map[Int, Map[String, VoterSlot]]
+}
+pub fn VoteState::add(Self, ClosureVote) -> Self
+pub fn VoteState::empty() -> Self
+pub fn VoteState::equals(Self, Self) -> Bool
+pub fn VoteState::merge(Self, Self) -> Self
+pub fn VoteState::slot(Self, Int, PublicKey) -> VoterSlot?
+pub fn VoteState::tally(Self, Int, Array[PublicKey]) -> VoteTally
+pub impl JoinSemilattice for VoteState
+
+pub(all) struct VoteTally {
+  candidates : Map[String, Array[ClosureVote]]
+  equivocators : Array[String]
+}
+
+pub struct Voter[C] {
+  hasher : &Hasher
+  signer : &Signer
+  order : CommandOrder[C]
+}
+pub fn[C] Voter::new(&Hasher, &Signer, CommandOrder[C]) -> Self[C]
+pub fn[C] Voter::public_key(Self[C]) -> PublicKey
+pub fn[C] Voter::vote(Self[C], Int, String, Array[Envelope[C]]) -> ClosureVote
+pub fn[C] Voter::vote_base(Self[C], Int, String, String) -> BaseVote
+
+pub(all) enum VoterSlot {
+  Voted(ClosureVote)
+  Equivocated(Array[ClosureVote])
+} derive(Eq, @debug.Debug)
+pub impl JoinSemilattice for VoterSlot
+
+// Type aliases
+
+// Traits
+pub(open) trait Finalizer {
+  fn verify_closure(Self, ClosureCertificate) -> Bool
+  fn verify_base(Self, BaseCertificate) -> Bool
+}
+
+pub(open) trait Hasher {
+  fn hash_string(Self, String) -> Digest
+}
+
+pub(open) trait JoinSemilattice {
+  fn join(Self, Self) -> Self raise ProtocolError
+  fn equivalent(Self, Self) -> Bool
+}
+
+pub(open) trait Signer {
+  fn sign(Self, Digest) -> Signature
+  fn public_key(Self) -> PublicKey
+}
+
+pub(open) trait Verifier {
+  fn verify(Self, PublicKey, Digest, Signature) -> Bool
+}
+

@@ -1,0 +1,342 @@
+///|
+predicate quorum_threshold_valid_post(
+  size : Int,
+  threshold : Int,
+  result : Bool,
+) {
+  if threshold >= 1 {
+    if threshold <= size {
+      if 2 * threshold > size {
+        result == true
+      } else {
+        result == false
+      }
+    } else {
+      result == false
+    }
+  } else {
+    result == false
+  }
+}
+
+///|
+/// Any two subsets of a roster of `size` members with at least `threshold`
+/// members each share at least one member.
+pub lemma two_quorums_intersect(
+  size : Int,
+  threshold : Int,
+  left : Int,
+  right : Int,
+) where {
+  proof_require: quorum_threshold_valid_post(size, threshold, true),
+  proof_require: left >= threshold,
+  proof_require: right >= threshold,
+  proof_require: left <= size,
+  proof_require: right <= size,
+  proof_ensure: left + right - size >= 1,
+} {
+}
+
+///|
+/// Two disjoint subsets cannot both reach the threshold, so a non-equivocating
+/// roster backs at most one payload per tick.
+pub lemma majority_is_unique(
+  size : Int,
+  threshold : Int,
+  left : Int,
+  right : Int,
+) where {
+  proof_require: quorum_threshold_valid_post(size, threshold, true),
+  proof_require: left >= threshold,
+  proof_require: right >= threshold,
+  proof_require: left + right <= size,
+  proof_ensure: false,
+} {
+}
+
+///|
+predicate compaction_drop_post(length : Int, retain : Int, result : Int) {
+  if length - retain > 0 {
+    result == length - retain
+  } else {
+    result == 0
+  }
+}
+
+///|
+pub lemma compaction_drop_is_bounded(
+  length : Int,
+  retain : Int,
+  drop : Int,
+) where {
+  proof_require: length >= 0,
+  proof_require: retain >= 0,
+  proof_require: compaction_drop_post(length, retain, drop),
+  proof_ensure: drop >= 0,
+  proof_ensure: drop <= length,
+} {
+}
+
+///|
+/// When there is more history than the window, exactly `retain` batches stay.
+pub lemma compaction_keeps_the_retention_window(
+  length : Int,
+  retain : Int,
+  drop : Int,
+) where {
+  proof_require: length >= 0,
+  proof_require: retain >= 0,
+  proof_require: length > retain,
+  proof_require: compaction_drop_post(length, retain, drop),
+  proof_ensure: length - drop == retain,
+} {
+}
+
+///|
+/// When the window already covers the history, nothing is dropped.
+pub lemma compaction_within_window_is_noop(
+  length : Int,
+  retain : Int,
+  drop : Int,
+) where {
+  proof_require: length >= 0,
+  proof_require: retain >= 0,
+  proof_require: length <= retain,
+  proof_require: compaction_drop_post(length, retain, drop),
+  proof_ensure: drop == 0,
+} {
+}
+
+///|
+/// Compaction moves the boundary but never the finalized frontier:
+/// `base.next_tick + committed.length()` is invariant.
+pub lemma compaction_never_shrinks_the_finalized_prefix(
+  base_next_tick : Int,
+  length : Int,
+  retain : Int,
+  drop : Int,
+) where {
+  proof_require: length >= 0,
+  proof_require: retain >= 0,
+  proof_require: compaction_drop_post(length, retain, drop),
+  proof_ensure: base_next_tick + drop + (length - drop) == base_next_tick + length,
+} {
+}
+
+///|
+fn kind_is_pending(kind : DecisionKind) -> Bool {
+  match kind {
+    KindPending => true
+    _ => false
+  }
+}
+
+///|
+fn kind_is_accepted(kind : DecisionKind) -> Bool {
+  match kind {
+    KindAccepted => true
+    _ => false
+  }
+}
+
+///|
+fn kind_is_rejected(kind : DecisionKind) -> Bool {
+  match kind {
+    KindRejected => true
+    _ => false
+  }
+}
+
+///|
+fn kind_is_late(kind : DecisionKind) -> Bool {
+  match kind {
+    KindLate => true
+    _ => false
+  }
+}
+
+///|
+predicate decision_kinds_equal(left : DecisionKind, right : DecisionKind) {
+  (kind_is_pending(left) == kind_is_pending(right)) &&
+  (kind_is_accepted(left) == kind_is_accepted(right)) &&
+  (kind_is_rejected(left) == kind_is_rejected(right)) &&
+  (kind_is_late(left) == kind_is_late(right))
+}
+
+///|
+/// The executable order: Pending is the bottom; a final kind is only <= itself.
+predicate decision_kind_less_or_equal_post(
+  before : DecisionKind,
+  after : DecisionKind,
+  result : Bool,
+) {
+  if kind_is_pending(before) {
+    result == true
+  } else {
+    if decision_kinds_equal(before, after) {
+      result == true
+    } else {
+      result == false
+    }
+  }
+}
+
+///|
+pub lemma decision_order_is_reflexive(kind : DecisionKind) where {
+  proof_ensure: decision_kind_less_or_equal_post(kind, kind, true),
+} {
+}
+
+///|
+pub lemma decision_order_is_antisymmetric(
+  left : DecisionKind,
+  right : DecisionKind,
+) where {
+  proof_require: decision_kind_less_or_equal_post(left, right, true),
+  proof_require: decision_kind_less_or_equal_post(right, left, true),
+  proof_ensure: decision_kinds_equal(left, right),
+} {
+}
+
+///|
+pub lemma decision_order_is_transitive(
+  first : DecisionKind,
+  second : DecisionKind,
+  third : DecisionKind,
+) where {
+  proof_require: decision_kind_less_or_equal_post(first, second, true),
+  proof_require: decision_kind_less_or_equal_post(second, third, true),
+  proof_ensure: decision_kind_less_or_equal_post(first, third, true),
+} {
+}
+
+///|
+/// Once final, a decision never moves: Accepted never becomes Rejected,
+/// Rejected never becomes Accepted, and a late rejection stays late.
+pub lemma final_decisions_never_change(
+  before : DecisionKind,
+  after : DecisionKind,
+) where {
+  proof_require: kind_is_pending(before) == false,
+  proof_require: decision_kind_less_or_equal_post(before, after, true),
+  proof_ensure: decision_kinds_equal(before, after),
+} {
+}
+
+///|
+pub lemma accepted_never_becomes_rejected(after : DecisionKind) where {
+  proof_require: decision_kind_less_or_equal_post(KindAccepted, after, true),
+  proof_ensure: kind_is_rejected(after) == false,
+  proof_ensure: kind_is_late(after) == false,
+} {
+}
+
+///|
+fn slot_is_novote(slot : VoteSlotKind) -> Bool {
+  match slot {
+    KindNoVote => true
+    _ => false
+  }
+}
+
+///|
+fn slot_is_voted(slot : VoteSlotKind) -> Bool {
+  match slot {
+    KindVoted => true
+    _ => false
+  }
+}
+
+///|
+fn slot_is_equivocated(slot : VoteSlotKind) -> Bool {
+  match slot {
+    KindEquivocated => true
+    _ => false
+  }
+}
+
+///|
+predicate vote_slots_equal(left : VoteSlotKind, right : VoteSlotKind) {
+  (slot_is_novote(left) == slot_is_novote(right)) &&
+  (slot_is_voted(left) == slot_is_voted(right)) &&
+  (slot_is_equivocated(left) == slot_is_equivocated(right))
+}
+
+///|
+/// The executable slot join, abstracted over payload equality.
+predicate merge_vote_slot_kind_post(
+  left : VoteSlotKind,
+  right : VoteSlotKind,
+  same_payload : Bool,
+  result : VoteSlotKind,
+) {
+  if slot_is_equivocated(left) {
+    slot_is_equivocated(result) == true
+  } else {
+    if slot_is_equivocated(right) {
+      slot_is_equivocated(result) == true
+    } else {
+      if slot_is_novote(left) {
+        vote_slots_equal(result, right)
+      } else {
+        if slot_is_novote(right) {
+          vote_slots_equal(result, left)
+        } else {
+          if same_payload {
+            slot_is_voted(result) == true
+          } else {
+            slot_is_equivocated(result) == true
+          }
+        }
+      }
+    }
+  }
+}
+
+///|
+pub lemma vote_slot_merge_is_idempotent(
+  slot : VoteSlotKind,
+  merged : VoteSlotKind,
+) where {
+  proof_require: merge_vote_slot_kind_post(slot, slot, true, merged),
+  proof_ensure: vote_slots_equal(merged, slot),
+} {
+}
+
+///|
+pub lemma vote_slot_merge_is_commutative(
+  left : VoteSlotKind,
+  right : VoteSlotKind,
+  same_payload : Bool,
+  left_right : VoteSlotKind,
+  right_left : VoteSlotKind,
+) where {
+  proof_require: merge_vote_slot_kind_post(left, right, same_payload, left_right),
+  proof_require: merge_vote_slot_kind_post(right, left, same_payload, right_left),
+  proof_ensure: vote_slots_equal(left_right, right_left),
+} {
+}
+
+///|
+pub lemma equivocation_is_absorbing(
+  other : VoteSlotKind,
+  same_payload : Bool,
+  merged : VoteSlotKind,
+) where {
+  proof_require: merge_vote_slot_kind_post(
+    KindEquivocated,
+    other,
+    same_payload,
+    merged,
+  ),
+  proof_ensure: slot_is_equivocated(merged) == true,
+} {
+}
+
+///|
+pub lemma conflicting_votes_never_count(merged : VoteSlotKind) where {
+  proof_require: merge_vote_slot_kind_post(KindVoted, KindVoted, false, merged),
+  proof_ensure: slot_is_equivocated(merged) == true,
+  proof_ensure: slot_is_voted(merged) == false,
+} {
+}

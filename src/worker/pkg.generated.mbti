@@ -1,0 +1,32 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mizchi/prdt/worker"
+
+// Values
+pub fn prdt_mmo_apply_catchup(String, String, String, String) -> String
+
+pub fn prdt_mmo_catchup(String, String, String, String) -> String
+
+pub fn prdt_mmo_close(String, String, String) -> String
+
+pub fn prdt_mmo_compact(String, String, String, Int) -> String
+
+pub fn prdt_mmo_decision(String, String, String) -> String
+
+pub fn prdt_mmo_delta(String, String, String) -> String
+
+pub fn prdt_mmo_digest(String, String, String) -> String
+
+pub fn prdt_mmo_merge(String, String, String, String) -> String
+
+pub fn prdt_mmo_propose(String, String, String, Int, String) -> String
+
+pub fn prdt_mmo_world(String, String, String) -> String
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
+

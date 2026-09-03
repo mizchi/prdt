@@ -1,0 +1,179 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mizchi/prdt/runtime"
+
+import {
+  "mizchi/prdt",
+  "moonbitlang/core/debug",
+  "moonbitlang/core/json",
+}
+
+// Values
+pub fn[S : ToJson + @json.FromJson, C : Eq + ToJson + @json.FromJson, E : ToJson + @json.FromJson, R : ToJson + @json.FromJson] run_simulation(@prdt.Protocol[S, C, E, R], ClosureMode[C], (Rng, Int) -> C, SimulationOptions) -> SimulationReport raise @prdt.ProtocolError
+
+// Errors
+
+// Types and methods
+pub(all) enum ClosureMode[C] {
+  SingleAuthority(@prdt.ClosureAuthority[C])
+  Quorum(@prdt.QuorumFinalizer, Array[@prdt.Voter[C]], Array[Int])
+}
+
+pub(all) struct ClosureProposal {
+  proposer : String
+  tick : Int
+  parent_decision_hash : String
+  ordered_command_ids : Array[String]
+} derive(Eq, @debug.Debug)
+
+pub(all) enum Gossip[S, C] {
+  DeltaGossip(@prdt.Delta[C])
+  CatchupGossip(@prdt.Catchup[S, C])
+  ClosureProposalGossip(ClosureProposal)
+  VoteGossip(@prdt.ClosureVote)
+  BaseVoteGossip(@prdt.BaseVote)
+}
+
+pub struct InMemoryCheckpointStore {
+  mut snapshot : String?
+}
+pub fn InMemoryCheckpointStore::new() -> Self
+pub impl CheckpointStore for InMemoryCheckpointStore
+
+pub struct InMemoryNetwork[M] {
+  queue : Array[Message[M]]
+  mut sequence : Int
+  mut groups : Map[String, Int]?
+}
+pub fn[M] InMemoryNetwork::deliver_one(Self[M], rng? : Rng) -> Message[M]?
+pub fn[M] InMemoryNetwork::duplicate_one(Self[M], Rng) -> Bool
+pub fn[M] InMemoryNetwork::heal(Self[M]) -> Unit
+pub fn[M] InMemoryNetwork::new() -> Self[M]
+pub fn[M] InMemoryNetwork::partition(Self[M], Array[Array[String]]) -> Unit
+pub fn[M] InMemoryNetwork::partitioned(Self[M]) -> Bool
+pub fn[M] InMemoryNetwork::pending(Self[M]) -> Int
+pub fn[M] InMemoryNetwork::send(Self[M], String, String, M) -> Unit
+
+pub(all) enum LateCommandPolicy {
+  RejectAsLate
+  MoveToNextTick(max_moves~ : Int)
+} derive(Eq, @debug.Debug)
+
+pub(all) struct Message[M] {
+  sequence : Int
+  sender : String
+  receiver : String
+  payload : M
+}
+
+pub struct QuorumAgent[S, C, E, R] {
+  replica : Replica[S, C, E, R]
+  voter : @prdt.Voter[C]
+  finalizer : @prdt.QuorumFinalizer
+  mut votes : @prdt.VoteState
+  mut base_votes : @prdt.BaseVoteState
+  mut base_voted_through : Int
+  pending : Array[ClosureProposal]
+  equivocate : Bool
+}
+pub fn[S : ToJson, C : Eq + ToJson, E : ToJson, R : ToJson] QuorumAgent::certify_head(Self[S, C, E, R]) -> Array[Gossip[S, C]] raise @prdt.ProtocolError
+pub fn[S, C, E, R] QuorumAgent::new(Replica[S, C, E, R], @prdt.Voter[C], @prdt.QuorumFinalizer, equivocate? : Bool) -> Self[S, C, E, R]
+pub fn[S, C, E, R] QuorumAgent::propose_closure(Self[S, C, E, R]) -> Array[Gossip[S, C]]
+pub fn[S : ToJson, C : Eq + ToJson, E : ToJson, R : ToJson] QuorumAgent::receive(Self[S, C, E, R], Gossip[S, C]) -> Array[Gossip[S, C]] raise @prdt.ProtocolError
+pub fn[S, C, E, R] QuorumAgent::replica(Self[S, C, E, R]) -> Replica[S, C, E, R]
+pub fn[S, C, E, R] QuorumAgent::retry_pending(Self[S, C, E, R]) -> Array[Gossip[S, C]]
+pub fn[S : ToJson, C : Eq + ToJson, E : ToJson, R : ToJson] QuorumAgent::try_close(Self[S, C, E, R]) -> Array[Gossip[S, C]] raise @prdt.ProtocolError
+pub fn[S, C, E, R] QuorumAgent::votes(Self[S, C, E, R]) -> @prdt.VoteState
+
+pub struct Replica[S, C, E, R] {
+  id : String
+  protocol : @prdt.Protocol[S, C, E, R]
+  store : &CheckpointStore
+  authority : @prdt.ClosureAuthority[C]?
+  late_policy : LateCommandPolicy
+  mut object : @prdt.ReplicatedDomain[S, C, E, R]
+  mut outbox : Array[@prdt.Delta[C]]
+  mut moved : Map[String, String]
+  mut move_depth : Map[String, Int]
+}
+pub fn[S, C, E, R] Replica::catchup_since(Self[S, C, E, R], @prdt.KnowledgeDigest) -> @prdt.Catchup[S, C]
+pub fn[S : ToJson, C : ToJson, E : ToJson, R : ToJson] Replica::checkpoint(Self[S, C, E, R]) -> Json
+pub fn[S : ToJson, C : Eq + ToJson, E : ToJson, R : ToJson] Replica::close_next_tick(Self[S, C, E, R]) -> @prdt.ClosureCertificate? raise @prdt.ProtocolError
+pub fn[S : ToJson, C : ToJson, E : ToJson, R : ToJson] Replica::compact(Self[S, C, E, R], retain_ticks~ : Int) -> Unit raise @prdt.ProtocolError
+pub fn[S, C, E, R] Replica::decision(Self[S, C, E, R]) -> @prdt.Decision[E, R]
+pub fn[S, C, E, R] Replica::digest(Self[S, C, E, R]) -> @prdt.KnowledgeDigest
+pub fn[S, C, E, R] Replica::domain_state(Self[S, C, E, R]) -> S
+pub fn[S, C, E, R] Replica::drain_outbox(Self[S, C, E, R]) -> Array[@prdt.Delta[C]]
+pub fn[S, C, E, R] Replica::full_delta(Self[S, C, E, R]) -> @prdt.Delta[C]
+pub fn[S, C, E, R] Replica::id(Self[S, C, E, R]) -> String
+pub fn[S, C, E, R] Replica::is_authority(Self[S, C, E, R]) -> Bool
+pub fn[S, C, E, R] Replica::moves(Self[S, C, E, R]) -> Array[(String, String)]
+pub fn[S : ToJson + @json.FromJson, C : Eq + @json.FromJson, E : ToJson + @json.FromJson, R : ToJson + @json.FromJson] Replica::new(@prdt.Protocol[S, C, E, R], String, &CheckpointStore, authority? : @prdt.ClosureAuthority[C], late_policy? : LateCommandPolicy) -> Self[S, C, E, R] raise @prdt.ProtocolError
+pub fn[S, C, E, R] Replica::next_tick(Self[S, C, E, R]) -> Int
+pub fn[S, C, E, R] Replica::object(Self[S, C, E, R]) -> @prdt.ReplicatedDomain[S, C, E, R]
+pub fn[S : ToJson, C : Eq + ToJson, E : ToJson, R : ToJson] Replica::propose(Self[S, C, E, R], Int, C) -> @prdt.Envelope[C] raise @prdt.ProtocolError
+pub fn[S, C, E, R] Replica::protocol(Self[S, C, E, R]) -> @prdt.Protocol[S, C, E, R]
+pub fn[S : ToJson, C : Eq + ToJson, E : ToJson, R : ToJson] Replica::receive(Self[S, C, E, R], @prdt.Delta[C]) -> Unit raise @prdt.ProtocolError
+pub fn[S : ToJson, C : Eq, E : ToJson, R : ToJson] Replica::receive_catchup(Self[S, C, E, R], @prdt.Catchup[S, C]) -> Unit raise @prdt.ProtocolError
+pub fn[S : ToJson, C : Eq + ToJson, E : ToJson, R : ToJson] Replica::reissue_late(Self[S, C, E, R]) -> Array[@prdt.Envelope[C]] raise @prdt.ProtocolError
+pub fn[S : ToJson + @json.FromJson, C : Eq + @json.FromJson, E : ToJson + @json.FromJson, R : ToJson + @json.FromJson] Replica::restart(Self[S, C, E, R]) -> Unit raise @prdt.ProtocolError
+pub fn[S, C : ToJson, E, R] Replica::state_hash(Self[S, C, E, R]) -> String
+
+pub struct Rng {
+  mut state : UInt
+}
+pub fn Rng::chance(Self, Double) -> Bool
+pub fn Rng::int(Self, Int) -> Int
+pub fn Rng::new(Int) -> Self
+pub fn Rng::next_double(Self) -> Double
+pub fn Rng::next_uint(Self) -> UInt
+pub fn[T] Rng::pick(Self, Array[T]) -> T
+pub fn[T] Rng::shuffle(Self, Array[T]) -> Array[T]
+pub fn[T] Rng::subset(Self, Array[T]) -> Array[T]
+
+pub(all) struct SimulationCounters {
+  mut proposals : Int
+  mut deliveries : Int
+  mut duplicates : Int
+  mut partitions : Int
+  mut heals : Int
+  mut closures : Int
+  mut closure_proposals : Int
+  mut restarts : Int
+  mut checkpoints : Int
+  mut compactions : Int
+  mut anti_entropy : Int
+  mut late_commands : Int
+  mut reissues : Int
+} derive(Eq, @debug.Debug)
+
+pub(all) struct SimulationOptions {
+  seed : Int
+  steps : Int
+  replica_count : Int
+  tick_horizon : Int
+  compaction_retain : Int?
+  late_policy : LateCommandPolicy
+}
+pub fn SimulationOptions::new(seed~ : Int, steps? : Int, replica_count? : Int, tick_horizon? : Int, compaction_retain? : Int, late_policy? : LateCommandPolicy) -> Self
+
+pub(all) struct SimulationReport {
+  seed : Int
+  counters : SimulationCounters
+  replica_ids : Array[String]
+  state_hashes : Array[String]
+  next_ticks : Array[Int]
+  head_decision_hashes : Array[String]
+  domain_state_hashes : Array[String]
+  converged : Bool
+  protocol_errors : Array[String]
+} derive(Eq, @debug.Debug)
+pub impl ToJson for SimulationReport
+
+// Type aliases
+
+// Traits
+pub(open) trait CheckpointStore {
+  fn load(Self) -> Json?
+  fn save(Self, Json) -> Unit
+}
+

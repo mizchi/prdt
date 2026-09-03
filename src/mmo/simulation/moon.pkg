@@ -1,0 +1,6 @@
+import {
+  "mizchi/prdt",
+  "mizchi/prdt/mmo",
+  "mizchi/prdt/runtime",
+  "moonbitlang/core/json",
+}

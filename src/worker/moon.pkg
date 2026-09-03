@@ -1,0 +1,41 @@
+import {
+  "mizchi/prdt",
+  "mizchi/prdt/mmo",
+  "moonbitlang/core/json",
+}
+
+supported_targets = "+js+wasm+wasm-gc"
+
+options(
+  link: {
+    "js": {
+      "exports": [
+        "prdt_mmo_propose",
+        "prdt_mmo_merge",
+        "prdt_mmo_close",
+        "prdt_mmo_decision",
+        "prdt_mmo_delta",
+        "prdt_mmo_world",
+        "prdt_mmo_digest",
+        "prdt_mmo_catchup",
+        "prdt_mmo_apply_catchup",
+        "prdt_mmo_compact",
+      ],
+    },
+    "wasm-gc": {
+      "exports": [
+        "prdt_mmo_propose",
+        "prdt_mmo_merge",
+        "prdt_mmo_close",
+        "prdt_mmo_decision",
+        "prdt_mmo_delta",
+        "prdt_mmo_world",
+        "prdt_mmo_digest",
+        "prdt_mmo_catchup",
+        "prdt_mmo_apply_catchup",
+        "prdt_mmo_compact",
+      ],
+      "use-js-builtin-string": true,
+    },
+  },
+)

@@ -1,0 +1,17 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "prdt-room",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-08-04",
+  "durable_objects": {
+    "bindings": [
+      { "name": "PRDT_ROOM", "class_name": "PrdtRoom" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["PrdtRoom"] }
+  ],
+  "vars": {
+    "AUTHORITY_SECRET": "dev-only-secret"
+  }
+}

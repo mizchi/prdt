@@ -1,0 +1,33 @@
+{
+  "name": "prdt-cf-room",
+  "private": true,
+  "type": "module",
+  "description": "Cloudflare Durable Object host for the MoonBit PRDT replicated domain (mizchi/prdt)",
+  "scripts": {
+    "build:moon": "moon build --target js --release",
+    "pretest": "pnpm run build:moon",
+    "pretypecheck": "pnpm run build:moon",
+    "predeploy": "pnpm run build:moon",
+    "predeploy:dry": "pnpm run build:moon",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dev": "pnpm run build:moon && wrangler dev",
+    "deploy": "wrangler deploy",
+    "deploy:dry": "wrangler deploy --dry-run"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "0.22.0",
+    "@cloudflare/workers-types": "5.20260903.1",
+    "@types/node": "24.13.3",
+    "typescript": "5.9.3",
+    "vitest": "4.1.11",
+    "wrangler": "4.128.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "workerd"
+    ]
+  }
+}
