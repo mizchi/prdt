@@ -160,8 +160,8 @@ fn eager_decision(
   ] = Map([])
   for resolved in batch.results {
     out[resolved.envelope.id] = match resolved.verdict {
-      @prdt.Accepted(event) => @prdt.DecisionAccepted(0, event)
-      @prdt.Rejected(reason) => @prdt.DecisionRejected(0, reason)
+      @prdt.Accepted(event~) => @prdt.DecisionAccepted(0, event)
+      @prdt.Rejected(reason~) => @prdt.DecisionRejected(0, reason)
     }
   }
   out

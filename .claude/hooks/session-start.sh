@@ -55,7 +55,7 @@ if command -v why3 >/dev/null 2>&1 && [ -n "${CLAUDE_ENV_FILE:-}" ]; then
 fi
 
 # TypeScript example workspaces with lockfiles.
-for dir in examples/cf-room; do
+for dir in examples/mmo/cf-room; do
   if [ -f "$dir/pnpm-lock.yaml" ]; then
     echo "session-start: pnpm install in $dir"
     pnpm --dir "$dir" install --frozen-lockfile

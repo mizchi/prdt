@@ -1,5 +1,10 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "mizchi/prdt/worker"
+package "mizchi/prdt_mmo/worker"
+
+import {
+  "mizchi/prdt_mmo",
+  "moonbitlang/core/debug",
+}
 
 // Values
 pub fn prdt_mmo_apply_catchup(String, String, String, String) -> String
@@ -25,6 +30,18 @@ pub fn prdt_mmo_world(String, String, String) -> String
 // Errors
 
 // Types and methods
+pub(all) enum CommandOutcome {
+  Pending
+  Accepted(tick~ : Int, event~ : @prdt_mmo.GameEvent)
+  Rejected(tick~ : Int, reason~ : @prdt_mmo.GameRejection)
+  RejectedLate(closed_tick~ : Int)
+} derive(Eq, ToJson, @debug.Debug)
+
+pub(all) struct DecisionView {
+  commands : Map[String, CommandOutcome]
+  committed_ticks : Array[Int]
+  head_decision_hash : String
+} derive(Eq, ToJson, @debug.Debug)
 
 // Type aliases
 

@@ -71,33 +71,39 @@ fn success(room : Room, extra : Map[String, Json]) -> String {
 }
 
 ///|
-fn decision_json(
+/// One command's outcome as seen by this replica. `Pending` may still become
+/// anything; the other three never change.
+pub(all) enum CommandOutcome {
+  Pending
+  Accepted(tick~ : Int, event~ : @mmo.GameEvent)
+  Rejected(tick~ : Int, reason~ : @mmo.GameRejection)
+  RejectedLate(closed_tick~ : Int)
+} derive(Eq, Debug, ToJson(style="legacy"))
+
+///|
+pub(all) struct DecisionView {
+  commands : Map[String, CommandOutcome]
+  committed_ticks : Array[Int]
+  head_decision_hash : String
+} derive(Eq, Debug, ToJson)
+
+///|
+fn decision_view(
   decision : @prdt.Decision[@mmo.GameEvent, @mmo.GameRejection],
-) -> Json {
-  let commands : Map[String, Json] = Map([])
+) -> DecisionView {
+  let commands : Map[String, CommandOutcome] = Map([])
   for id in decision.command_ids() {
     commands[id] = match decision.of(id) {
-      @prdt.DecisionPending => { "status": "Pending" }
-      @prdt.DecisionAccepted(tick, event) =>
-        {
-          "status": "Accepted",
-          "tick": tick.to_json(),
-          "event": event.to_json(),
-        }
-      @prdt.DecisionRejected(tick, reason) =>
-        {
-          "status": "Rejected",
-          "tick": tick.to_json(),
-          "reason": reason.to_json(),
-        }
-      @prdt.DecisionLate(closed_tick) =>
-        { "status": "RejectedLate", "closed_tick": closed_tick.to_json() }
+      @prdt.DecisionPending => Pending
+      @prdt.DecisionAccepted(tick, event) => Accepted(tick~, event~)
+      @prdt.DecisionRejected(tick, reason) => Rejected(tick~, reason~)
+      @prdt.DecisionLate(closed_tick) => RejectedLate(closed_tick~)
     }
   }
   {
-    "commands": Json::object(commands),
-    "committed_ticks": decision.committed_ticks().to_json(),
-    "head_decision_hash": decision.head_decision_hash().to_json(),
+    commands,
+    committed_ticks: decision.committed_ticks(),
+    head_decision_hash: decision.head_decision_hash(),
   }
 }
 
@@ -114,8 +120,10 @@ fn[T : @json.FromJson] decode_input(
   what : String,
 ) -> T raise @prdt.ProtocolError {
   @json.from_json(json) catch {
-    @json.JsonDecodeError((_, message)) =>
-      raise @prdt.SnapshotMismatch(what + ": " + message)
+    @json.JsonDecodeError((path, message)) =>
+      raise @prdt.SnapshotMismatch(
+        what + ": " + message + " at " + path.to_string(),
+      )
   }
 }
 
@@ -139,7 +147,7 @@ pub fn prdt_mmo_propose(
     success(room, {
       "envelope": proposal.envelope.to_json(),
       "delta": proposal.delta.to_json(),
-      "decision": decision_json(room.object.decision()),
+      "decision": decision_view(room.object.decision()).to_json(),
     })
   } catch {
     error => protocol_failure(error)
@@ -161,7 +169,9 @@ pub fn prdt_mmo_merge(
       "delta",
     )
     room.object.merge(delta)
-    success(room, { "decision": decision_json(room.object.decision()) })
+    success(room, {
+      "decision": decision_view(room.object.decision()).to_json(),
+    })
   } catch {
     error => protocol_failure(error)
   }
@@ -215,7 +225,7 @@ pub fn prdt_mmo_close(
       "certificate": certificate.to_json(),
       "base_certificate": base_certificate.to_json(),
       "delta": delta.to_json(),
-      "decision": decision_json(room.object.decision()),
+      "decision": decision_view(room.object.decision()).to_json(),
     })
   } catch {
     error => protocol_failure(error)
@@ -230,7 +240,9 @@ pub fn prdt_mmo_decision(
 ) -> String {
   try {
     let room = open_room(snapshot, secret, replica_id)
-    success(room, { "decision": decision_json(room.object.decision()) })
+    success(room, {
+      "decision": decision_view(room.object.decision()).to_json(),
+    })
   } catch {
     error => protocol_failure(error)
   }
@@ -318,7 +330,9 @@ pub fn prdt_mmo_apply_catchup(
       "catchup",
     )
     room.object.apply_catchup(catchup)
-    success(room, { "decision": decision_json(room.object.decision()) })
+    success(room, {
+      "decision": decision_view(room.object.decision()).to_json(),
+    })
   } catch {
     error => protocol_failure(error)
   }

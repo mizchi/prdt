@@ -1,8 +1,9 @@
 /**
  * Cloudflare Workers adapter: one Durable Object per room hosts the
  * single-authority replica of the MMO sample. All protocol logic lives in
- * the MoonBit package `mizchi/prdt`; this file only persists
- * the snapshot and maps HTTP to the bridge.
+ * the MoonBit packages `mizchi/prdt` (core) and `mizchi/prdt_mmo` (domain
+ * and bridge); this file only persists the snapshot and maps HTTP to the
+ * bridge. Enums cross the wire as `{"$tag": "<Constructor>", ...fields}`.
  *
  * Routes (all under /rooms/:room):
  *   POST /propose   { tick, command }  -> { envelope, delta, decision, next_tick }

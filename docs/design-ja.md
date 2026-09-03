@@ -5,8 +5,12 @@
 の考え方で、ドメイン固有の状態遷移と分散環境での入力収集・順序確定・複製・合意を分離する
 MoonBit 実装である。もともと `mizchi/converge_audit` の中で開発し、独立 module として切り出した。
 `Hasher` / `Signer` / `Verifier` trait は converge_audit と同じ形なので adapter は自明である。
-コアは実行環境非依存で、[`examples/cf-room`](../examples/cf-room/README.md) が
+コアは実行環境非依存で、[`examples/mmo/cf-room`](../examples/mmo/cf-room/README.md) が
 Cloudflare Durable Object 上で JS ブリッジ経由に動かす。
+
+リポジトリは `moon.work` のワークスペースで、ルートの module `mizchi/prdt` にはコア
+（protocol・lattice・finalizer・snapshot・runtime・contracts）だけを置き、MMO サンプル・
+シミュレーション・JSON ブリッジ・Cloudflare host は `examples/mmo`（module `mizchi/prdt_mmo`）にある。
 
 ```text
 Pure Domain State Machine
@@ -118,16 +122,27 @@ equivocation 吸収）。実行コードはこれらの関数を呼ぶ（`Quorum
 証明書の同一性は payload（tick・親 hash・id 列）で定義し、attestation の組み合わせが違っても同じ決定とみなす。
 安全性は投票 lattice と過半数 threshold から従う。liveness は best effort（leader election や view change は無い）
 
+### JSON エンコーディング
+
+転送・永続化される型（`Envelope`・`Delta`・各証明書・投票・`KnowledgeDigest`・`Catchup`・
+`Snapshot`・`ReplicatedSnapshot`、MMO の command / event / world）はすべて
+`derive(ToJson, FromJson)` で codec を得る。手書きの codec は `Digest` / `Signature` / `PublicKey` の
+3 つの newtype だけで、これらは素の文字列として流れる。enum は `style="legacy"` で
+`{"$tag": "<Constructor>", ...ラベル付きフィールド}`、`Option` フィールドは `None` のとき省略
+（`null` は不正）、`Map[String, _]` はオブジェクトになる。hash は必ず `canonical_json`
+（キーを再帰的にソート）を通すので、エンコード時のキー順に依存しない。decode 失敗は
+`SnapshotMismatch` に JSON path 付きで報告される。
+
 ## 検証
 
 | 種別 | 内容 | 場所 |
 | --- | --- | --- |
-| Unit | canonical JSON / SHA-256 / MAC、lattice 各種、closure 重複、prefix、resolve_batch、MMO ドメイン規則、致死 race の両到着順、late command、証明書偽造・不正形・親不一致・非 canonical 順、snapshot 復元と改竄検出、quorum と equivocation | `src/*_test.mbt`、`src/mmo/*_test.mbt` |
-| Property（seed 生成） | lattice laws、配送順・重複・merge-tree 不変、snapshot 往復、decision monotonicity、closure uniqueness、prefix safety、late の最終性、domain validity | `src/mmo/simulation/property_test.mbt` |
-| Simulation | reorder / duplicate / partition / heal / restart / 証明付き compaction + 状態転送 / digest 同期、single authority と quorum（3・5 replica、equivocating voter あり）、`MoveToNextTick`、seed ごとの収束と再現性 | `src/mmo/simulation/simulation_test.mbt`、`late_policy_test.mbt` |
+| Unit | canonical JSON / SHA-256 / MAC、lattice 各種、closure 重複、prefix、resolve_batch、MMO ドメイン規則、致死 race の両到着順、late command、証明書偽造・不正形・親不一致・非 canonical 順、snapshot 復元と改竄検出、quorum と equivocation | `src/*_test.mbt`、`examples/mmo/src/*_test.mbt` |
+| Property（seed 生成） | lattice laws、配送順・重複・merge-tree 不変、snapshot 往復、decision monotonicity、closure uniqueness、prefix safety、late の最終性、domain validity | `examples/mmo/src/simulation/property_test.mbt` |
+| Simulation | reorder / duplicate / partition / heal / restart / 証明付き compaction + 状態転送 / digest 同期、single authority と quorum（3・5 replica、equivocating voter あり）、`MoveToNextTick`、seed ごとの収束と再現性 | `examples/mmo/src/simulation/simulation_test.mbt`、`late_policy_test.mbt` |
 | Proof | quorum 閾値、compaction 算術、decision order、vote slot join | `src/contracts`（`just prove`） |
-| Negative | unstable alive guard、premature acceptance | `src/mmo/simulation/negative_test.mbt` |
-| Bridge / Worker | JSON 文字列ブリッジ、digest 同期と証明付き base 転送、workerd 上の Durable Object 経由で client replica が収束 | `src/worker/bridge_test.mbt`、`examples/cf-room/test` |
+| Negative | unstable alive guard、premature acceptance | `examples/mmo/src/simulation/negative_test.mbt` |
+| Bridge / Worker | JSON 文字列ブリッジ、digest 同期と証明付き base 転送、workerd 上の Durable Object 経由で client replica が収束 | `examples/mmo/src/worker/bridge_test.mbt`、`examples/mmo/cf-room/test` |
 
 ```sh
 just check

@@ -1,14 +1,17 @@
 ///|
-/// Canonical JSON: object keys sorted recursively, arrays kept in order.
+/// Canonical JSON: object keys sorted recursively by UTF-16 code units (the
+/// JCS / RFC 8785 order, which is also what JavaScript's default string
+/// comparison gives), arrays kept in order.
 ///
 /// Every hash in this package is computed over `canonicalize(json)` so that
 /// all replicas hash the same logical value to the same digest regardless of
-/// key insertion order or Map iteration order.
+/// key insertion order or Map iteration order. MoonBit's own `String`
+/// ordering compares lengths first, so it is not used here.
 pub fn canonical_json(value : Json) -> Json {
   match value {
     Object(fields) => {
       let keys = fields.keys().to_array()
-      keys.sort()
+      keys.sort_by(compare_code_units)
       let sorted : Map[String, Json] = Map([])
       for key in keys {
         sorted[key] = canonical_json(fields.get(key).unwrap())
@@ -18,6 +21,22 @@ pub fn canonical_json(value : Json) -> Json {
     Array(items) => Json::array(items.map(canonical_json))
     other => other
   }
+}
+
+///|
+fn compare_code_units(left : String, right : String) -> Int {
+  let shared = if left.length() < right.length() {
+    left.length()
+  } else {
+    right.length()
+  }
+  for i in 0..<shared {
+    let order = left.unsafe_get(i).compare(right.unsafe_get(i))
+    if order != 0 {
+      return order
+    }
+  }
+  left.length().compare(right.length())
 }
 
 ///|

@@ -1,13 +1,15 @@
 # cf-room (Cloudflare host)
 
-Cloudflare Workers host for the MoonBit package
-[`mizchi/prdt`](../../README.md): one Durable Object
-per room runs the single-authority replica of the MMO sample.
+Cloudflare Workers host for the MoonBit module
+[`mizchi/prdt`](../../../README.md) and its MMO sample
+[`mizchi/prdt_mmo`](../src): one Durable Object per room runs the
+single-authority replica of the MMO sample.
 
 All protocol logic (domain reducer, proposal/closure/committed lattices,
 finalizers, snapshots) is MoonBit. This directory only:
 
-- loads the bridge compiled by `moon build --target js --release`
+- loads the bridge (`mizchi/prdt_mmo/worker`) compiled by
+  `moon build --target js --release` into the workspace `_build`
   (`src/moonbit.ts`),
 - persists the replica snapshot in Durable Object storage and maps HTTP to
   the bridge (`src/worker.ts`),
@@ -28,6 +30,12 @@ All under `/rooms/:room`:
 | `POST /compact` | `{ retain_ticks }` | fold history into a certified base |
 | `GET /decision` | | `Pending / Accepted / Rejected / RejectedLate` per command |
 | `GET /world` | | domain state and replicated state hash |
+
+Commands, events, rejections, and verdicts are MoonBit enums encoded as
+`{"$tag": "<Constructor>", ...fields}`, for example
+`{"$tag": "UseSkill", "actor": "player-a", "skill": "fireball", "mp_cost": 30}`
+and `{"$tag": "Rejected", "tick": 0, "reason": {"$tag": "ActorDead"}}`.
+Optional fields such as `Catchup.certificate` are omitted rather than `null`.
 
 The dev authority is a shared-secret MAC (`AUTHORITY_SECRET` in
 `wrangler.jsonc`). Replace it with a real signer behind the MoonBit `Signer` /

@@ -4,6 +4,9 @@ test "canonical json sorts object keys recursively and keeps array order" {
   assert_eq(canonicalize(value), "{\"a\":{\"y\":true,\"z\":[3,1,2]},\"b\":1}")
   let reordered : Json = { "a": { "y": true, "z": [3, 1, 2] }, "b": 1 }
   assert_eq(canonicalize(value), canonicalize(reordered))
+  // Code-unit order, not MoonBit's length-first String order: "max_hp" < "mp".
+  let lengths : Json = { "mp": 1, "max_hp": 2, "hp": 3, "": 4 }
+  assert_eq(canonicalize(lengths), "{\"\":4,\"hp\":3,\"max_hp\":2,\"mp\":1}")
 }
 
 ///|

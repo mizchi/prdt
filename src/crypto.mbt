@@ -28,3 +28,34 @@ pub(open) trait Signer {
 pub(open) trait Verifier {
   fn verify(Self, PublicKey, Digest, Signature) -> Bool
 }
+
+///|
+/// Digests, signatures, and keys travel as plain JSON strings.
+pub impl ToJson for Digest with fn to_json(self) {
+  self.0.to_json()
+}
+
+///|
+pub impl @json.FromJson for Digest with fn from_json(json, path) {
+  Digest(@json.from_json(json, path~))
+}
+
+///|
+pub impl ToJson for Signature with fn to_json(self) {
+  self.0.to_json()
+}
+
+///|
+pub impl @json.FromJson for Signature with fn from_json(json, path) {
+  Signature(@json.from_json(json, path~))
+}
+
+///|
+pub impl ToJson for PublicKey with fn to_json(self) {
+  self.0.to_json()
+}
+
+///|
+pub impl @json.FromJson for PublicKey with fn from_json(json, path) {
+  PublicKey(@json.from_json(json, path~))
+}

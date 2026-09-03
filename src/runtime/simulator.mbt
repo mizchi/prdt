@@ -22,7 +22,7 @@ pub(all) struct SimulationCounters {
   mut anti_entropy : Int
   mut late_commands : Int
   mut reissues : Int
-} derive(Eq, Debug)
+} derive(Eq, Debug, ToJson)
 
 ///|
 pub(all) struct SimulationReport {
@@ -35,36 +35,7 @@ pub(all) struct SimulationReport {
   domain_state_hashes : Array[String]
   converged : Bool
   protocol_errors : Array[String]
-} derive(Eq, Debug)
-
-///|
-pub impl ToJson for SimulationReport with fn to_json(self) {
-  {
-    "seed": self.seed.to_json(),
-    "counters": {
-      "proposals": self.counters.proposals.to_json(),
-      "deliveries": self.counters.deliveries.to_json(),
-      "duplicates": self.counters.duplicates.to_json(),
-      "partitions": self.counters.partitions.to_json(),
-      "heals": self.counters.heals.to_json(),
-      "closures": self.counters.closures.to_json(),
-      "closure_proposals": self.counters.closure_proposals.to_json(),
-      "restarts": self.counters.restarts.to_json(),
-      "checkpoints": self.counters.checkpoints.to_json(),
-      "compactions": self.counters.compactions.to_json(),
-      "anti_entropy": self.counters.anti_entropy.to_json(),
-      "late_commands": self.counters.late_commands.to_json(),
-      "reissues": self.counters.reissues.to_json(),
-    },
-    "replica_ids": self.replica_ids.to_json(),
-    "state_hashes": self.state_hashes.to_json(),
-    "next_ticks": self.next_ticks.to_json(),
-    "head_decision_hashes": self.head_decision_hashes.to_json(),
-    "domain_state_hashes": self.domain_state_hashes.to_json(),
-    "converged": self.converged.to_json(),
-    "protocol_errors": self.protocol_errors.to_json(),
-  }
-}
+} derive(Eq, Debug, ToJson)
 
 ///|
 /// How ticks get closed.

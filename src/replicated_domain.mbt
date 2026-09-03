@@ -29,7 +29,7 @@ pub(all) struct Base[S] {
   next_tick : Int
   decision_hash : String
   state : S
-} derive(Eq, Debug)
+} derive(Eq, Debug, ToJson, FromJson)
 
 ///|
 pub struct State[S, C, E, R] {
@@ -58,47 +58,7 @@ pub(all) struct KnowledgeDigest {
   closed_ticks : Array[Int]
   /// Certified base ticks at or above `base_next_tick`.
   certified_ticks : Array[Int]
-} derive(Eq, Debug)
-
-///|
-pub impl ToJson for KnowledgeDigest with fn to_json(self) {
-  {
-    "base_next_tick": self.base_next_tick.to_json(),
-    "next_tick": self.next_tick.to_json(),
-    "known_ids": self.known_ids.to_json(),
-    "closed_ticks": self.closed_ticks.to_json(),
-    "certified_ticks": self.certified_ticks.to_json(),
-  }
-}
-
-///|
-pub impl @json.FromJson for KnowledgeDigest with fn from_json(json, path) {
-  guard json is Object(fields) else {
-    raise @json.JsonDecodeError((path, "KnowledgeDigest: expected object"))
-  }
-  {
-    base_next_tick: @json.from_json(
-      json_field(fields, "base_next_tick", path),
-      path=path.add_key("base_next_tick"),
-    ),
-    next_tick: @json.from_json(
-      json_field(fields, "next_tick", path),
-      path=path.add_key("next_tick"),
-    ),
-    known_ids: @json.from_json(
-      json_field(fields, "known_ids", path),
-      path=path.add_key("known_ids"),
-    ),
-    closed_ticks: @json.from_json(
-      json_field(fields, "closed_ticks", path),
-      path=path.add_key("closed_ticks"),
-    ),
-    certified_ticks: @json.from_json(
-      json_field(fields, "certified_ticks", path),
-      path=path.add_key("certified_ticks"),
-    ),
-  }
-}
+} derive(Eq, Debug, ToJson, FromJson)
 
 ///|
 /// What replicas exchange. The committed prefix is never transported.
@@ -106,7 +66,7 @@ pub(all) struct Delta[C] {
   proposals : Array[Envelope[C]]
   closures : Array[ClosureCertificate]
   base_certificates : Array[BaseCertificate]
-} derive(Eq, Debug)
+} derive(Eq, Debug, ToJson, FromJson)
 
 ///|
 pub fn[C] Delta::empty() -> Delta[C] {
@@ -747,8 +707,8 @@ pub fn[S, C, E, R] Protocol::decision(
         None => None
       }
       commands[id] = match verdict {
-        Some(Accepted(event)) => DecisionAccepted(tick, event)
-        Some(Rejected(reason)) => DecisionRejected(tick, reason)
+        Some(Accepted(event~)) => DecisionAccepted(tick, event)
+        Some(Rejected(reason~)) => DecisionRejected(tick, reason)
         None =>
           match included {
             Some(set) =>
@@ -794,173 +754,47 @@ pub fn[S, C : ToJson, E, R] Protocol::state_hash(
 }
 
 ///|
-pub impl[C : ToJson] ToJson for Delta[C] with fn to_json(self) {
-  {
-    "proposals": self.proposals.to_json(),
-    "closures": self.closures.to_json(),
-    "base_certificates": self.base_certificates.to_json(),
-  }
-}
+pub let snapshot_version : Int = 3
 
 ///|
-pub impl[C : @json.FromJson] @json.FromJson for Delta[C] with fn from_json(
-  json,
-  path,
-) {
-  guard json is Object(fields) else {
-    raise @json.JsonDecodeError((path, "Delta: expected object"))
-  }
-  {
-    proposals: @json.from_json(
-      json_field(fields, "proposals", path),
-      path=path.add_key("proposals"),
-    ),
-    closures: @json.from_json(
-      json_field(fields, "closures", path),
-      path=path.add_key("closures"),
-    ),
-    base_certificates: match fields.get("base_certificates") {
-      Some(value) =>
-        @json.from_json(value, path=path.add_key("base_certificates"))
-      None => []
-    },
-  }
-}
+/// Persisted form of a `State`. The committed prefix is stored for speed but
+/// never trusted: `restore_snapshot` re-derives it from the knowledge and
+/// rejects the snapshot when they differ.
+pub(all) struct Snapshot[S, C, E, R] {
+  version : Int
+  genesis_tick : Int
+  base : Base[S]
+  /// Absent only for the genesis base.
+  base_certificate : BaseCertificate?
+  certified_bases : Array[BaseCertificate]
+  proposals : Array[Envelope[C]]
+  closures : Array[ClosureCertificate]
+  committed : Array[CommittedBatch[ResolvedBatch[S, C, E, R]]]
+} derive(ToJson, FromJson)
 
 ///|
-pub impl[S : ToJson, C : ToJson, E : ToJson, R : ToJson] ToJson for ResolvedBatch[
-  S,
-  C,
-  E,
-  R,
-] with fn to_json(self) {
+pub fn[S, C, E, R] Protocol::snapshot_of(
+  self : Protocol[S, C, E, R],
+  state : State[S, C, E, R],
+) -> Snapshot[S, C, E, R] {
   {
-    "tick": self.tick.to_json(),
-    "previous_state_hash": self.previous_state_hash.to_json(),
-    "ordered_command_hash": self.ordered_command_hash.to_json(),
-    "results": self.results.to_json(),
-    "resulting_state": self.resulting_state.to_json(),
-    "resulting_state_hash": self.resulting_state_hash.to_json(),
+    version: snapshot_version,
+    genesis_tick: self.genesis_tick,
+    base: state.base,
+    base_certificate: state.base_certificate,
+    certified_bases: state.certified_bases(),
+    proposals: state.proposals.list(),
+    closures: state.closures.list(),
+    committed: state.committed.batches,
   }
 }
-
-///|
-pub impl[
-  S : @json.FromJson,
-  C : @json.FromJson,
-  E : @json.FromJson,
-  R : @json.FromJson,
-] @json.FromJson for ResolvedBatch[S, C, E, R] with fn from_json(json, path) {
-  guard json is Object(fields) else {
-    raise @json.JsonDecodeError((path, "ResolvedBatch: expected object"))
-  }
-  {
-    tick: @json.from_json(
-      json_field(fields, "tick", path),
-      path=path.add_key("tick"),
-    ),
-    previous_state_hash: @json.from_json(
-      json_field(fields, "previous_state_hash", path),
-      path=path.add_key("previous_state_hash"),
-    ),
-    ordered_command_hash: @json.from_json(
-      json_field(fields, "ordered_command_hash", path),
-      path=path.add_key("ordered_command_hash"),
-    ),
-    results: @json.from_json(
-      json_field(fields, "results", path),
-      path=path.add_key("results"),
-    ),
-    resulting_state: @json.from_json(
-      json_field(fields, "resulting_state", path),
-      path=path.add_key("resulting_state"),
-    ),
-    resulting_state_hash: @json.from_json(
-      json_field(fields, "resulting_state_hash", path),
-      path=path.add_key("resulting_state_hash"),
-    ),
-  }
-}
-
-///|
-pub impl[R : ToJson] ToJson for CommittedBatch[R] with fn to_json(self) {
-  {
-    "tick": self.tick.to_json(),
-    "parent_decision_hash": self.parent_decision_hash.to_json(),
-    "ordered_commands_hash": self.ordered_commands_hash.to_json(),
-    "result_hash": self.result_hash.to_json(),
-    "result": self.result.to_json(),
-  }
-}
-
-///|
-pub impl[R : @json.FromJson] @json.FromJson for CommittedBatch[R] with fn from_json(
-  json,
-  path,
-) {
-  guard json is Object(fields) else {
-    raise @json.JsonDecodeError((path, "CommittedBatch: expected object"))
-  }
-  {
-    tick: @json.from_json(
-      json_field(fields, "tick", path),
-      path=path.add_key("tick"),
-    ),
-    parent_decision_hash: @json.from_json(
-      json_field(fields, "parent_decision_hash", path),
-      path=path.add_key("parent_decision_hash"),
-    ),
-    ordered_commands_hash: @json.from_json(
-      json_field(fields, "ordered_commands_hash", path),
-      path=path.add_key("ordered_commands_hash"),
-    ),
-    result_hash: @json.from_json(
-      json_field(fields, "result_hash", path),
-      path=path.add_key("result_hash"),
-    ),
-    result: @json.from_json(
-      json_field(fields, "result", path),
-      path=path.add_key("result"),
-    ),
-  }
-}
-
-///|
-pub let snapshot_version : Int = 2
 
 ///|
 pub fn[S : ToJson, C : ToJson, E : ToJson, R : ToJson] Protocol::snapshot(
   self : Protocol[S, C, E, R],
   state : State[S, C, E, R],
 ) -> Json {
-  {
-    "version": snapshot_version.to_json(),
-    "genesis_tick": self.genesis_tick.to_json(),
-    "base": {
-      "next_tick": state.base.next_tick.to_json(),
-      "decision_hash": state.base.decision_hash.to_json(),
-      "state": state.base.state.to_json(),
-    },
-    "base_certificate": match state.base_certificate {
-      Some(certificate) => certificate.to_json()
-      None => Json::null()
-    },
-    "certified_bases": state.certified_bases().to_json(),
-    "proposals": state.proposals.list().to_json(),
-    "closures": state.closures.list().to_json(),
-    "committed": state.committed.batches.to_json(),
-  }
-}
-
-///|
-fn snapshot_field(
-  fields : Map[String, Json],
-  key : String,
-) -> Json raise ProtocolError {
-  match fields.get(key) {
-    Some(value) => value
-    None => raise SnapshotMismatch("missing field " + key)
-  }
+  self.snapshot_of(state).to_json()
 }
 
 ///|
@@ -969,15 +803,13 @@ fn[T : @json.FromJson] snapshot_decode(
   what : String,
 ) -> T raise ProtocolError {
   @json.from_json(json) catch {
-    @json.JsonDecodeError((_, message)) =>
-      raise SnapshotMismatch(what + ": " + message)
+    @json.JsonDecodeError((path, message)) =>
+      raise SnapshotMismatch(what + ": " + message + " at " + path.to_string())
   }
 }
 
 ///|
-/// Restore a snapshot. The persisted committed prefix is re-derived from the
-/// persisted knowledge and must match it exactly; a snapshot is never trusted
-/// blindly.
+/// Restore a snapshot from its JSON encoding. See `restore_snapshot`.
 pub fn[
   S : ToJson + @json.FromJson,
   C : Eq + @json.FromJson,
@@ -987,48 +819,29 @@ pub fn[
   self : Protocol[S, C, E, R],
   json : Json,
 ) -> State[S, C, E, R] raise ProtocolError {
-  guard json is Object(fields) else {
-    raise SnapshotMismatch("snapshot: expected object")
-  }
-  let version : Int = snapshot_decode(
-    snapshot_field(fields, "version"),
-    "version",
-  )
-  if version != snapshot_version {
+  self.restore_snapshot(snapshot_decode(json, "snapshot"))
+}
+
+///|
+/// Restore a snapshot. The persisted committed prefix is re-derived from the
+/// persisted knowledge and must match it exactly; a snapshot is never trusted
+/// blindly.
+pub fn[S : ToJson, C : Eq, E : ToJson, R : ToJson] Protocol::restore_snapshot(
+  self : Protocol[S, C, E, R],
+  snapshot : Snapshot[S, C, E, R],
+) -> State[S, C, E, R] raise ProtocolError {
+  if snapshot.version != snapshot_version {
     raise SnapshotMismatch("unsupported snapshot version")
   }
-  let genesis_tick : Int = snapshot_decode(
-    snapshot_field(fields, "genesis_tick"),
-    "genesis_tick",
-  )
-  if genesis_tick != self.genesis_tick {
+  if snapshot.genesis_tick != self.genesis_tick {
     raise SnapshotMismatch("genesis tick mismatch")
   }
-  let base_json = snapshot_field(fields, "base")
-  guard base_json is Object(base_fields) else {
-    raise SnapshotMismatch("base: expected object")
-  }
-  let base : Base[S] = {
-    next_tick: snapshot_decode(
-      snapshot_field(base_fields, "next_tick"),
-      "base.next_tick",
-    ),
-    decision_hash: snapshot_decode(
-      snapshot_field(base_fields, "decision_hash"),
-      "base.decision_hash",
-    ),
-    state: snapshot_decode(snapshot_field(base_fields, "state"), "base.state"),
-  }
+  let base = snapshot.base
   if base.next_tick == self.genesis_tick &&
     base.decision_hash != self.genesis_hash {
     raise SnapshotMismatch("genesis base hash mismatch")
   }
-  let base_certificate : BaseCertificate? = match
-    snapshot_field(fields, "base_certificate") {
-    Null => None
-    value => Some(snapshot_decode(value, "base_certificate"))
-  }
-  match base_certificate {
+  match snapshot.base_certificate {
     Some(certificate) =>
       if certificate.next_tick != base.next_tick ||
         certificate.decision_hash != base.decision_hash {
@@ -1039,34 +852,18 @@ pub fn[
         raise SnapshotMismatch("compacted base without certificate")
       }
   }
-  let certified_list : Array[BaseCertificate] = snapshot_decode(
-    snapshot_field(fields, "certified_bases"),
-    "certified_bases",
-  )
   let certified_bases : Map[Int, BaseCertificate] = Map([])
-  for certificate in certified_list {
+  for certificate in snapshot.certified_bases {
     certified_bases[certificate.next_tick] = certificate
   }
-  let proposals : Array[Envelope[C]] = snapshot_decode(
-    snapshot_field(fields, "proposals"),
-    "proposals",
-  )
-  let closures : Array[ClosureCertificate] = snapshot_decode(
-    snapshot_field(fields, "closures"),
-    "closures",
-  )
-  let persisted : Array[CommittedBatch[ResolvedBatch[S, C, E, R]]] = snapshot_decode(
-    snapshot_field(fields, "committed"),
-    "committed",
-  )
   let mut proposal_state : ProposalState[C] = ProposalState::empty()
-  for envelope in proposals {
+  for envelope in snapshot.proposals {
     proposal_state = proposal_state.add(envelope)
   }
-  let closure_map = ClosureMap::from_certificates(closures)
+  let closure_map = ClosureMap::from_certificates(snapshot.closures)
   let recomputed = self.advance({
     base,
-    base_certificate,
+    base_certificate: snapshot.base_certificate,
     certified_bases,
     proposals: proposal_state.prune_below(base.next_tick),
     closures: closure_map.prune_below(base.next_tick),
@@ -1075,7 +872,7 @@ pub fn[
     error => raise SnapshotMismatch("recomputation failed: " + error.kind())
   }
   let persisted_log : CommittedLog[ResolvedBatch[S, C, E, R]] = {
-    batches: persisted,
+    batches: snapshot.committed,
   }
   let compatible = recomputed.committed.equals(
     recomputed.committed.merge(persisted_log),
@@ -1216,14 +1013,24 @@ pub fn[S, C : ToJson, E, R] ReplicatedDomain::state_hash(
 }
 
 ///|
+/// Persisted form of a `ReplicatedDomain`: the protocol snapshot plus the
+/// replica identity and its next local sequence number.
+pub(all) struct ReplicatedSnapshot[S, C, E, R] {
+  state : Snapshot[S, C, E, R]
+  replica_id : String
+  next_local_sequence : Int
+} derive(ToJson, FromJson)
+
+///|
 pub fn[S : ToJson, C : ToJson, E : ToJson, R : ToJson] ReplicatedDomain::snapshot(
   self : ReplicatedDomain[S, C, E, R],
 ) -> Json {
-  {
-    "state": self.protocol.snapshot(self.state),
-    "replica_id": self.replica_id.to_json(),
-    "next_local_sequence": self.next_local_sequence.to_json(),
+  let snapshot : ReplicatedSnapshot[S, C, E, R] = {
+    state: self.protocol.snapshot_of(self.state),
+    replica_id: self.replica_id,
+    next_local_sequence: self.next_local_sequence,
   }
+  snapshot.to_json()
 }
 
 ///|
@@ -1236,55 +1043,14 @@ pub fn[
   protocol : Protocol[S, C, E, R],
   json : Json,
 ) -> ReplicatedDomain[S, C, E, R] raise ProtocolError {
-  guard json is Object(fields) else {
-    raise SnapshotMismatch("replicated snapshot: expected object")
-  }
-  let replica_id : String = snapshot_decode(
-    snapshot_field(fields, "replica_id"),
-    "replica_id",
-  )
-  let next_local_sequence : Int = snapshot_decode(
-    snapshot_field(fields, "next_local_sequence"),
-    "next_local_sequence",
+  let snapshot : ReplicatedSnapshot[S, C, E, R] = snapshot_decode(
+    json, "replicated snapshot",
   )
   {
     protocol,
-    replica_id,
-    state: protocol.restore(snapshot_field(fields, "state")),
-    next_local_sequence,
-  }
-}
-
-///|
-pub impl[S : ToJson] ToJson for Base[S] with fn to_json(self) {
-  {
-    "next_tick": self.next_tick.to_json(),
-    "decision_hash": self.decision_hash.to_json(),
-    "state": self.state.to_json(),
-  }
-}
-
-///|
-pub impl[S : @json.FromJson] @json.FromJson for Base[S] with fn from_json(
-  json,
-  path,
-) {
-  guard json is Object(fields) else {
-    raise @json.JsonDecodeError((path, "Base: expected object"))
-  }
-  {
-    next_tick: @json.from_json(
-      json_field(fields, "next_tick", path),
-      path=path.add_key("next_tick"),
-    ),
-    decision_hash: @json.from_json(
-      json_field(fields, "decision_hash", path),
-      path=path.add_key("decision_hash"),
-    ),
-    state: @json.from_json(
-      json_field(fields, "state", path),
-      path=path.add_key("state"),
-    ),
+    replica_id: snapshot.replica_id,
+    state: protocol.restore_snapshot(snapshot.state),
+    next_local_sequence: snapshot.next_local_sequence,
   }
 }
 
@@ -1294,52 +1060,15 @@ pub impl[S : @json.FromJson] @json.FromJson for Base[S] with fn from_json(
 ///
 /// Trust note: a base cannot be re-derived by the receiver once the sender
 /// has forgotten the history behind it. `apply_catchup` therefore adopts a
-/// base only when the receiver's own committed prefix cannot contradict it;
-/// authenticating bases (a checkpoint certificate signed by the authority or
-/// a quorum, as in `audit/`) is future work.
+/// base only when it is certified (`certificate`) and the receiver's own
+/// committed prefix cannot contradict it.
 pub(all) struct Catchup[S, C] {
   base : Base[S]
-  /// Required unless `base` is the genesis base.
+  /// Required unless `base` is the genesis base. Omitted from the JSON
+  /// encoding when absent.
   certificate : BaseCertificate?
   delta : Delta[C]
-}
-
-///|
-pub impl[S : ToJson, C : ToJson] ToJson for Catchup[S, C] with fn to_json(self) {
-  {
-    "base": self.base.to_json(),
-    "certificate": match self.certificate {
-      Some(certificate) => certificate.to_json()
-      None => Json::null()
-    },
-    "delta": self.delta.to_json(),
-  }
-}
-
-///|
-pub impl[S : @json.FromJson, C : @json.FromJson] @json.FromJson for Catchup[
-  S,
-  C,
-] with fn from_json(json, path) {
-  guard json is Object(fields) else {
-    raise @json.JsonDecodeError((path, "Catchup: expected object"))
-  }
-  {
-    base: @json.from_json(
-      json_field(fields, "base", path),
-      path=path.add_key("base"),
-    ),
-    certificate: match fields.get("certificate") {
-      Some(Null) | None => None
-      Some(value) =>
-        Some(@json.from_json(value, path=path.add_key("certificate")))
-    },
-    delta: @json.from_json(
-      json_field(fields, "delta", path),
-      path=path.add_key("delta"),
-    ),
-  }
-}
+} derive(ToJson, FromJson)
 
 ///|
 pub fn[S, C, E, R] Protocol::catchup_since(

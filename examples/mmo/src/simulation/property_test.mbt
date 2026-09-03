@@ -133,13 +133,13 @@ test "domain validity: accepted skills had hp > 0 and mp >= cost immediately bef
       )
       for resolved in batch.result.results {
         match resolved.verdict {
-          @prdt.Accepted(@mmo.SkillActivated(actor~, mp_cost~, ..)) => {
+          @prdt.Accepted(event=@mmo.SkillActivated(actor~, mp_cost~, ..)) => {
             let player = world.player(actor).unwrap()
             assert_true(player.hp > 0)
             assert_true(player.mp >= mp_cost)
             assert_true(resolved.envelope.command is @mmo.UseSkill(..))
           }
-          @prdt.Rejected(@mmo.ActorDead) => {
+          @prdt.Rejected(reason=@mmo.ActorDead) => {
             guard resolved.envelope.command is @mmo.UseSkill(actor~, ..) else {
               fail("ActorDead only rejects skills")
             }
@@ -148,8 +148,8 @@ test "domain validity: accepted skills had hp > 0 and mp >= cost immediately bef
           _ => ()
         }
         match resolved.verdict {
-          @prdt.Accepted(event) => world = @mmo.apply_game_event(world, event)
-          @prdt.Rejected(_) => ()
+          @prdt.Accepted(event~) => world = @mmo.apply_game_event(world, event)
+          @prdt.Rejected(..) => ()
         }
         for id in world.player_ids() {
           assert_true(world.hp(id).unwrap() >= 0)
