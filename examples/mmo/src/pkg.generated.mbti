@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "mizchi/prdt/mmo"
+package "mizchi/prdt_mmo"
 
 import {
   "mizchi/prdt",
@@ -34,16 +34,12 @@ pub fn validate_game_command(World, GameCommand) -> @prdt.Validation[GameEvent, 
 pub(all) enum GameCommand {
   Damage(source~ : String, target~ : String, amount~ : Int)
   UseSkill(actor~ : String, skill~ : String, mp_cost~ : Int)
-} derive(Eq, @debug.Debug)
-pub impl ToJson for GameCommand
-pub impl @json.FromJson for GameCommand
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) enum GameEvent {
   DamageApplied(source~ : String, target~ : String, amount~ : Int)
   SkillActivated(actor~ : String, skill~ : String, mp_cost~ : Int)
-} derive(Eq, @debug.Debug)
-pub impl ToJson for GameEvent
-pub impl @json.FromJson for GameEvent
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) enum GameRejection {
   ActorNotFound
@@ -51,22 +47,17 @@ pub(all) enum GameRejection {
   InsufficientMP
   TargetNotFound
   InvalidAmount
-} derive(Eq, @debug.Debug)
-pub fn GameRejection::name(Self) -> String
-pub impl ToJson for GameRejection
-pub impl @json.FromJson for GameRejection
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) struct Player {
   hp : Int
   max_hp : Int
   mp : Int
-} derive(Eq, @debug.Debug)
-pub impl ToJson for Player
-pub impl @json.FromJson for Player
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub struct World {
   players : Map[String, Player]
-}
+} derive(ToJson, @json.FromJson)
 pub fn World::hp(Self, String) -> Int?
 pub fn World::is_alive(Self, String) -> Bool
 pub fn World::mp(Self, String) -> Int?
@@ -75,9 +66,7 @@ pub fn World::player(Self, String) -> Player?
 pub fn World::player_ids(Self) -> Array[String]
 pub fn World::with_player(Self, String, Player) -> Self
 pub impl Eq for World
-pub impl ToJson for World
 pub impl @debug.Debug for World
-pub impl @json.FromJson for World
 
 // Type aliases
 pub type GameObject = @prdt.ReplicatedDomain[World, GameCommand, GameEvent, GameRejection]

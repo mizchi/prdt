@@ -46,8 +46,6 @@ pub fn[R] is_prefix_of(CommittedLog[R], CommittedLog[R]) -> Bool
 
 pub fn is_valid_tick(Int) -> Bool
 
-pub fn json_field(Map[String, Json], String, @json.JsonPath) -> Json raise @json.JsonDecodeError
-
 pub fn[L : JoinSemilattice] lattice_law_violations(L, L, L) -> Array[String] raise ProtocolError
 
 pub fn[L : JoinSemilattice] less_or_equal(L, L) -> Bool raise ProtocolError
@@ -98,34 +96,28 @@ pub(all) suberror QuorumConfigError {
 pub(all) struct Attestation {
   signer : PublicKey
   signature : Signature
-} derive(Eq, @debug.Debug)
-pub impl ToJson for Attestation
-pub impl @json.FromJson for Attestation
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) struct Base[S] {
   next_tick : Int
   decision_hash : String
   state : S
-} derive(Eq, @debug.Debug)
-pub impl[S : ToJson] ToJson for Base[S]
-pub impl[S : @json.FromJson] @json.FromJson for Base[S]
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) struct BaseCertificate {
   next_tick : Int
   decision_hash : String
   state_hash : String
   attestations : Array[Attestation]
-} derive(Eq, @debug.Debug)
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 pub fn BaseCertificate::payload_json(Self) -> Json
 pub fn BaseCertificate::same_base(Self, Self) -> Bool
-pub impl ToJson for BaseCertificate
-pub impl @json.FromJson for BaseCertificate
 
 pub(all) struct BasePayload {
   next_tick : Int
   decision_hash : String
   state_hash : String
-} derive(Eq, @debug.Debug)
+} derive(Eq, ToJson, @debug.Debug)
 pub fn BasePayload::digest(Self, &Hasher) -> Digest
 pub fn BasePayload::message(Self) -> String
 pub fn BasePayload::of(BaseCertificate) -> Self
@@ -136,10 +128,8 @@ pub(all) struct BaseVote {
   decision_hash : String
   state_hash : String
   signature : Signature
-} derive(Eq, @debug.Debug)
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 pub fn BaseVote::payload(Self) -> BasePayload
-pub impl ToJson for BaseVote
-pub impl @json.FromJson for BaseVote
 
 pub(all) enum BaseVoteSlot {
   BaseVoted(BaseVote)
@@ -157,9 +147,7 @@ pub(all) struct Catchup[S, C] {
   base : Base[S]
   certificate : BaseCertificate?
   delta : Delta[C]
-}
-pub impl[S : ToJson, C : ToJson] ToJson for Catchup[S, C]
-pub impl[S : @json.FromJson, C : @json.FromJson] @json.FromJson for Catchup[S, C]
+} derive(ToJson, @json.FromJson)
 
 pub struct ClosureAuthority[C] {
   hasher : &Hasher
@@ -176,11 +164,9 @@ pub(all) struct ClosureCertificate {
   ordered_command_ids : Array[String]
   ordered_commands_hash : String
   attestations : Array[Attestation]
-} derive(Eq, @debug.Debug)
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 pub fn ClosureCertificate::payload_json(Self) -> Json
 pub fn ClosureCertificate::same_decision(Self, Self) -> Bool
-pub impl ToJson for ClosureCertificate
-pub impl @json.FromJson for ClosureCertificate
 
 pub(all) enum ClosureDecision {
   ClosurePending
@@ -217,10 +203,8 @@ pub(all) struct ClosureVote {
   ordered_command_ids : Array[String]
   ordered_commands_hash : String
   signature : Signature
-} derive(Eq, @debug.Debug)
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 pub fn ClosureVote::payload(Self) -> ClosurePayload
-pub impl ToJson for ClosureVote
-pub impl @json.FromJson for ClosureVote
 
 pub(all) enum CommandDecision[E, R] {
   DecisionPending
@@ -241,9 +225,7 @@ pub(all) struct CommittedBatch[R] {
   ordered_commands_hash : String
   result_hash : String
   result : R
-} derive(Eq, @debug.Debug)
-pub impl[R : ToJson] ToJson for CommittedBatch[R]
-pub impl[R : @json.FromJson] @json.FromJson for CommittedBatch[R]
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub struct CommittedLog[R] {
   batches : Array[CommittedBatch[R]]
@@ -273,12 +255,12 @@ pub(all) struct Delta[C] {
   proposals : Array[Envelope[C]]
   closures : Array[ClosureCertificate]
   base_certificates : Array[BaseCertificate]
-} derive(Eq, @debug.Debug)
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 pub fn[C] Delta::empty() -> Self[C]
-pub impl[C : ToJson] ToJson for Delta[C]
-pub impl[C : @json.FromJson] @json.FromJson for Delta[C]
 
 pub(all) struct Digest(String) derive(Compare, Eq, Hash, @debug.Debug)
+pub impl ToJson for Digest
+pub impl @json.FromJson for Digest
 
 pub(all) struct Domain[S, C, E, R] {
   initial_state : () -> S
@@ -292,9 +274,7 @@ pub(all) struct Envelope[C] {
   submitted_by : String
   local_sequence : Int
   command : C
-} derive(Eq, @debug.Debug)
-pub impl[C : ToJson] ToJson for Envelope[C]
-pub impl[C : @json.FromJson] @json.FromJson for Envelope[C]
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub struct KeyedVerifier {
   verifiers : Map[String, &Verifier]
@@ -309,9 +289,7 @@ pub(all) struct KnowledgeDigest {
   known_ids : Array[String]
   closed_ticks : Array[Int]
   certified_ticks : Array[Int]
-} derive(Eq, @debug.Debug)
-pub impl ToJson for KnowledgeDigest
-pub impl @json.FromJson for KnowledgeDigest
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) struct Proposal[C] {
   envelope : Envelope[C]
@@ -362,11 +340,15 @@ pub fn[S : ToJson, C, E, R] Protocol::new(Domain[S, C, E, R], CommandOrder[C], &
 pub fn[S, C, E, R] Protocol::next_tick(Self[S, C, E, R], State[S, C, E, R]) -> Int
 pub fn[S, C, E, R] Protocol::order(Self[S, C, E, R]) -> CommandOrder[C]
 pub fn[S : ToJson + @json.FromJson, C : Eq + @json.FromJson, E : ToJson + @json.FromJson, R : ToJson + @json.FromJson] Protocol::restore(Self[S, C, E, R], Json) -> State[S, C, E, R] raise ProtocolError
+pub fn[S : ToJson, C : Eq, E : ToJson, R : ToJson] Protocol::restore_snapshot(Self[S, C, E, R], Snapshot[S, C, E, R]) -> State[S, C, E, R] raise ProtocolError
 pub fn[S : ToJson, C : ToJson, E : ToJson, R : ToJson] Protocol::snapshot(Self[S, C, E, R], State[S, C, E, R]) -> Json
+pub fn[S, C, E, R] Protocol::snapshot_of(Self[S, C, E, R], State[S, C, E, R]) -> Snapshot[S, C, E, R]
 pub fn[S, C : ToJson, E, R] Protocol::state_hash(Self[S, C, E, R], State[S, C, E, R]) -> String
 pub fn[S, C : Eq, E, R] Protocol::states_equal(Self[S, C, E, R], State[S, C, E, R], State[S, C, E, R]) -> Bool
 
 pub(all) struct PublicKey(String) derive(Eq, Hash, @debug.Debug)
+pub impl ToJson for PublicKey
+pub impl @json.FromJson for PublicKey
 
 pub struct QuorumFinalizer {
   hasher : &Hasher
@@ -414,6 +396,12 @@ pub fn[S : ToJson, C : ToJson, E : ToJson, R : ToJson] ReplicatedDomain::snapsho
 pub fn[S, C, E, R] ReplicatedDomain::state(Self[S, C, E, R]) -> State[S, C, E, R]
 pub fn[S, C : ToJson, E, R] ReplicatedDomain::state_hash(Self[S, C, E, R]) -> String
 
+pub(all) struct ReplicatedSnapshot[S, C, E, R] {
+  state : Snapshot[S, C, E, R]
+  replica_id : String
+  next_local_sequence : Int
+} derive(ToJson, @json.FromJson)
+
 pub(all) struct ResolvedBatch[S, C, E, R] {
   tick : Int
   previous_state_hash : String
@@ -421,16 +409,12 @@ pub(all) struct ResolvedBatch[S, C, E, R] {
   results : Array[ResolvedCommand[C, E, R]]
   resulting_state : S
   resulting_state_hash : String
-} derive(Eq, @debug.Debug)
-pub impl[S : ToJson, C : ToJson, E : ToJson, R : ToJson] ToJson for ResolvedBatch[S, C, E, R]
-pub impl[S : @json.FromJson, C : @json.FromJson, E : @json.FromJson, R : @json.FromJson] @json.FromJson for ResolvedBatch[S, C, E, R]
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) struct ResolvedCommand[C, E, R] {
   envelope : Envelope[C]
   verdict : Verdict[E, R]
-} derive(Eq, @debug.Debug)
-pub impl[C : ToJson, E : ToJson, R : ToJson] ToJson for ResolvedCommand[C, E, R]
-pub impl[C : @json.FromJson, E : @json.FromJson, R : @json.FromJson] @json.FromJson for ResolvedCommand[C, E, R]
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub struct Sha256Hasher {
 }
@@ -446,6 +430,8 @@ pub impl Signer for SharedSecretAuthenticator
 pub impl Verifier for SharedSecretAuthenticator
 
 pub(all) struct Signature(String) derive(Eq, @debug.Debug)
+pub impl ToJson for Signature
+pub impl @json.FromJson for Signature
 
 pub struct SingleAuthorityFinalizer {
   hasher : &Hasher
@@ -454,6 +440,17 @@ pub struct SingleAuthorityFinalizer {
 }
 pub fn SingleAuthorityFinalizer::new(&Hasher, &Verifier, PublicKey) -> Self
 pub impl Finalizer for SingleAuthorityFinalizer
+
+pub(all) struct Snapshot[S, C, E, R] {
+  version : Int
+  genesis_tick : Int
+  base : Base[S]
+  base_certificate : BaseCertificate?
+  certified_bases : Array[BaseCertificate]
+  proposals : Array[Envelope[C]]
+  closures : Array[ClosureCertificate]
+  committed : Array[CommittedBatch[ResolvedBatch[S, C, E, R]]]
+} derive(ToJson, @json.FromJson)
 
 pub struct State[S, C, E, R] {
   base : Base[S]
@@ -476,11 +473,9 @@ pub(all) enum Validation[E, R] {
 } derive(Eq, @debug.Debug)
 
 pub(all) enum Verdict[E, R] {
-  Accepted(E)
-  Rejected(R)
-} derive(Eq, @debug.Debug)
-pub impl[E : ToJson, R : ToJson] ToJson for Verdict[E, R]
-pub impl[E : @json.FromJson, R : @json.FromJson] @json.FromJson for Verdict[E, R]
+  Accepted(event~ : E)
+  Rejected(reason~ : R)
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub struct VoteState {
   by_tick : Map[Int, Map[String, VoterSlot]]

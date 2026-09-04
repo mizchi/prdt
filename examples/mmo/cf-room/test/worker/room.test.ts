@@ -5,8 +5,8 @@ import { replica, type JsonValue, type ReplicaHandle } from "../../src/moonbit.t
 const BASE = "https://example.com/rooms/lethal-race";
 const SECRET = "dev-only-secret";
 const PLAYER_A = "player-a";
-const FIREBALL = { type: "UseSkill", actor: PLAYER_A, skill: "fireball", mp_cost: 30 };
-const LETHAL_HIT = { type: "Damage", source: "monster", target: PLAYER_A, amount: 20 };
+const FIREBALL = { $tag: "UseSkill", actor: PLAYER_A, skill: "fireball", mp_cost: 30 };
+const LETHAL_HIT = { $tag: "Damage", source: "monster", target: PLAYER_A, amount: 20 };
 
 async function call(path: string, init?: RequestInit): Promise<{ status: number; body: any }> {
   const response = await SELF.fetch(`${BASE}${path}`, init);
@@ -31,7 +31,7 @@ describe("PrdtRoom Durable Object over the MoonBit bridge", () => {
     expect((await post("/delta", proposed.delta!)).status).toBe(200);
     const authorityProposal = await post("/propose", { tick: 0, command: LETHAL_HIT });
     expect(authorityProposal.status).toBe(200);
-    expect(authorityProposal.body.decision.commands["X:0"]).toEqual({ status: "Pending" });
+    expect(authorityProposal.body.decision.commands["X:0"]).toEqual({ $tag: "Pending" });
 
     const closed = await post("/close", {});
     expect(closed.status).toBe(200);
@@ -41,18 +41,18 @@ describe("PrdtRoom Durable Object over the MoonBit bridge", () => {
     expect(decision.body.decision).toMatchObject({
       committed_ticks: [0],
       commands: {
-        "authority:0": { status: "Accepted", event: { type: "DamageApplied", target: PLAYER_A } },
-        "X:0": { status: "Rejected", reason: { type: "ActorDead" } },
+        "authority:0": { $tag: "Accepted", event: { $tag: "DamageApplied", target: PLAYER_A } },
+        "X:0": { $tag: "Rejected", reason: { $tag: "ActorDead" } },
       },
     });
     const world = await call("/world");
-    expect(world.body).toMatchObject({ next_tick: 1, world: { players: [[PLAYER_A, { hp: 0, mp: 100 }]] } });
+    expect(world.body).toMatchObject({ next_tick: 1, world: { players: { [PLAYER_A]: { hp: 0, mp: 100 } } } });
 
     // Anti-entropy: X pulls the authority's full knowledge and reaches the same verdicts.
     const full = await call("/delta");
     expectOk(await replica.merge(x, full.body.delta as JsonValue));
     const xDecision = expectOk(await replica.decision(x));
-    expect((xDecision.decision as any).commands["X:0"]).toEqual({ status: "Rejected", tick: 0, reason: { type: "ActorDead" } });
+    expect((xDecision.decision as any).commands["X:0"]).toEqual({ $tag: "Rejected", tick: 0, reason: { $tag: "ActorDead" } });
     const xWorld = expectOk(await replica.world(x));
     expect(xWorld.state_hash).toBe(world.body.state_hash);
   });
@@ -76,7 +76,7 @@ describe("PrdtRoom Durable Object over the MoonBit bridge", () => {
     expect(world.state_hash).toBe(roomWorld.state_hash);
 
     // Without the certificate the base is refused.
-    const stripped = { ...(synced.catchup as { [key: string]: JsonValue }), certificate: null };
+    const { certificate: _certificate, ...stripped } = synced.catchup as { [key: string]: JsonValue };
     const fresh: ReplicaHandle = { replicaId: "D", secret: SECRET, snapshot: "" };
     const refused = await replica.applyCatchup(fresh, stripped);
     expect(refused.ok).toBe(false);
@@ -88,7 +88,7 @@ describe("PrdtRoom Durable Object over the MoonBit bridge", () => {
     const proposed = expectOk(await replica.propose(y, 5, FIREBALL));
     expect((await post("/delta", proposed.delta!)).status).toBe(200);
     const envelope = proposed.envelope as { [key: string]: JsonValue };
-    const conflicting = { proposals: [{ ...envelope, command: LETHAL_HIT }], closures: [] };
+    const conflicting = { proposals: [{ ...envelope, command: LETHAL_HIT }], closures: [], base_certificates: [] };
     const response = await post("/delta", conflicting);
     expect(response.status).toBe(409);
     expect(response.body).toMatchObject({ error: "ConflictingProposal" });

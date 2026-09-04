@@ -40,7 +40,7 @@ test "bridge resolves the lethal race through JSON strings and a client converge
     decision.get("commands").unwrap() is Object(commands) else {
     fail("decision commands")
   }
-  assert_eq(commands.get("X:0").unwrap(), { "status": "Pending" })
+  assert_eq(commands.get("X:0").unwrap(), { "$tag": "Pending" })
 
   let a3 = prdt_mmo_close(snapshot_of(a2), secret, "authority")
   assert_eq(field(a3, "ok"), true)
@@ -58,17 +58,17 @@ test "bridge resolves the lethal race through JSON strings and a client converge
   guard final_commands.get("X:0").unwrap() is Object(skill) else {
     fail("skill")
   }
-  assert_eq(skill.get("status").unwrap(), "Rejected")
-  assert_eq(skill.get("reason").unwrap(), { "type": "ActorDead" })
+  assert_eq(skill.get("$tag").unwrap(), "Rejected")
+  assert_eq(skill.get("reason").unwrap(), { "$tag": "ActorDead" })
   guard final_commands.get("authority:0").unwrap() is Object(damage) else {
     fail("damage")
   }
-  assert_eq(damage.get("status").unwrap(), "Accepted")
+  assert_eq(damage.get("$tag").unwrap(), "Accepted")
   assert_eq(final_decision.get("committed_ticks").unwrap(), [0])
   let world = prdt_mmo_world(snapshot_of(a4), secret, "authority")
   assert_eq(field(world, "next_tick"), 1)
   assert_eq(field(world, "world"), {
-    "players": [["player-a", { "hp": 0, "max_hp": 10, "mp": 100 }]],
+    "players": { "player-a": { "hp": 0, "max_hp": 10, "mp": 100 } },
   })
 
   // Anti-entropy: X pulls the authority's full delta and reaches the same verdicts.
@@ -100,6 +100,7 @@ test "bridge reports protocol errors and bad input as failures" {
   let conflicting : Json = {
     "proposals": [Json::object(fields)],
     "closures": [],
+    "base_certificates": [],
   }
   let response = prdt_mmo_merge(
     snapshot_of(y1),
@@ -163,7 +164,7 @@ test "bridge syncs by digest, transfers a certified base, and refuses an unsigne
 
   // Stripping the certificate makes the base unacceptable.
   guard catchup is Object(fields) else { fail("catchup object") }
-  fields["certificate"] = Json::null()
+  fields.remove("certificate")
   let refused = prdt_mmo_apply_catchup(
     "",
     secret,

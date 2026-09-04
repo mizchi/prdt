@@ -11,14 +11,14 @@ pub(all) struct BaseCertificate {
   decision_hash : String
   state_hash : String
   attestations : Array[Attestation]
-} derive(Eq, Debug)
+} derive(Eq, Debug, ToJson, FromJson)
 
 ///|
 pub(all) struct BasePayload {
   next_tick : Int
   decision_hash : String
   state_hash : String
-} derive(Eq, Debug)
+} derive(Eq, Debug, ToJson)
 
 ///|
 pub let base_message_domain : String = "prdt/base/v1"
@@ -59,46 +59,7 @@ pub fn BaseCertificate::same_base(
 
 ///|
 pub fn BaseCertificate::payload_json(self : BaseCertificate) -> Json {
-  {
-    "next_tick": self.next_tick.to_json(),
-    "decision_hash": self.decision_hash.to_json(),
-    "state_hash": self.state_hash.to_json(),
-  }
-}
-
-///|
-pub impl ToJson for BaseCertificate with fn to_json(self) {
-  {
-    "next_tick": self.next_tick.to_json(),
-    "decision_hash": self.decision_hash.to_json(),
-    "state_hash": self.state_hash.to_json(),
-    "attestations": self.attestations.to_json(),
-  }
-}
-
-///|
-pub impl @json.FromJson for BaseCertificate with fn from_json(json, path) {
-  guard json is Object(fields) else {
-    raise @json.JsonDecodeError((path, "BaseCertificate: expected object"))
-  }
-  {
-    next_tick: @json.from_json(
-      json_field(fields, "next_tick", path),
-      path=path.add_key("next_tick"),
-    ),
-    decision_hash: @json.from_json(
-      json_field(fields, "decision_hash", path),
-      path=path.add_key("decision_hash"),
-    ),
-    state_hash: @json.from_json(
-      json_field(fields, "state_hash", path),
-      path=path.add_key("state_hash"),
-    ),
-    attestations: @json.from_json(
-      json_field(fields, "attestations", path),
-      path=path.add_key("attestations"),
-    ),
-  }
+  BasePayload::of(self).to_json()
 }
 
 ///|
@@ -110,7 +71,7 @@ pub(all) struct BaseVote {
   decision_hash : String
   state_hash : String
   signature : Signature
-} derive(Eq, Debug)
+} derive(Eq, Debug, ToJson, FromJson)
 
 ///|
 pub fn BaseVote::payload(self : BaseVote) -> BasePayload {
@@ -118,48 +79,6 @@ pub fn BaseVote::payload(self : BaseVote) -> BasePayload {
     next_tick: self.next_tick,
     decision_hash: self.decision_hash,
     state_hash: self.state_hash,
-  }
-}
-
-///|
-pub impl ToJson for BaseVote with fn to_json(self) {
-  {
-    "voter": self.voter.0.to_json(),
-    "next_tick": self.next_tick.to_json(),
-    "decision_hash": self.decision_hash.to_json(),
-    "state_hash": self.state_hash.to_json(),
-    "signature": self.signature.0.to_json(),
-  }
-}
-
-///|
-pub impl @json.FromJson for BaseVote with fn from_json(json, path) {
-  guard json is Object(fields) else {
-    raise @json.JsonDecodeError((path, "BaseVote: expected object"))
-  }
-  let voter : String = @json.from_json(
-    json_field(fields, "voter", path),
-    path=path.add_key("voter"),
-  )
-  let signature : String = @json.from_json(
-    json_field(fields, "signature", path),
-    path=path.add_key("signature"),
-  )
-  {
-    voter: PublicKey(voter),
-    next_tick: @json.from_json(
-      json_field(fields, "next_tick", path),
-      path=path.add_key("next_tick"),
-    ),
-    decision_hash: @json.from_json(
-      json_field(fields, "decision_hash", path),
-      path=path.add_key("decision_hash"),
-    ),
-    state_hash: @json.from_json(
-      json_field(fields, "state_hash", path),
-      path=path.add_key("state_hash"),
-    ),
-    signature: Signature(signature),
   }
 }
 

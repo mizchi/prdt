@@ -10,7 +10,7 @@ pub(all) struct CommittedBatch[R] {
   ordered_commands_hash : String
   result_hash : String
   result : R
-} derive(Eq, Debug)
+} derive(Eq, Debug, ToJson, FromJson)
 
 ///|
 pub struct CommittedLog[R] {

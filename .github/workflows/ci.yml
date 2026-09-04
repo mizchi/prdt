@@ -43,7 +43,7 @@ jobs:
           git diff --exit-code
       - name: Check all targets
         run: moon check --target all
-      - name: Run MoonBit tests
+      - name: Run MoonBit tests (core and examples/mmo)
         run: moon test
       - name: Build WASM-GC
         run: moon build --target wasm-gc
@@ -93,18 +93,18 @@ jobs:
         uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
         with:
           version: 10.33.0
-          package_json_file: examples/cf-room/package.json
+          package_json_file: examples/mmo/cf-room/package.json
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
           cache: pnpm
-          cache-dependency-path: examples/cf-room/pnpm-lock.yaml
+          cache-dependency-path: examples/mmo/cf-room/pnpm-lock.yaml
       - name: Install dependencies
-        run: pnpm --dir examples/cf-room install --frozen-lockfile
+        run: pnpm --dir examples/mmo/cf-room install --frozen-lockfile
       - name: Type-check
-        run: pnpm --dir examples/cf-room typecheck
+        run: pnpm --dir examples/mmo/cf-room typecheck
       - name: Test the Durable Object room
-        run: pnpm --dir examples/cf-room test
+        run: pnpm --dir examples/mmo/cf-room test
       - name: Validate deploy bundle
-        run: pnpm --dir examples/cf-room deploy:dry
+        run: pnpm --dir examples/mmo/cf-room deploy:dry

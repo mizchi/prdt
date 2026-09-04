@@ -11,7 +11,7 @@ pub(all) struct ResolvedBatch[S, C, E, R] {
   results : Array[ResolvedCommand[C, E, R]]
   resulting_state : S
   resulting_state_hash : String
-} derive(Eq, Debug)
+} derive(Eq, Debug, ToJson, FromJson)
 
 ///|
 pub(all) suberror BatchError {
@@ -52,9 +52,9 @@ pub fn[S : ToJson, C, E, R] resolve_batch(
     match (domain.validate)(state, envelope.command) {
       Accept(event) => {
         state = (domain.apply)(state, event)
-        results.push({ envelope, verdict: Accepted(event) })
+        results.push({ envelope, verdict: Accepted(event~) })
       }
-      Reject(reason) => results.push({ envelope, verdict: Rejected(reason) })
+      Reject(reason) => results.push({ envelope, verdict: Rejected(reason~) })
     }
   }
   {

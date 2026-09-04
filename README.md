@@ -15,30 +15,49 @@ Replicated Domain Object
 The core has no clock, randomness, network, or platform crypto. Hashing and
 signing go through the `Hasher`, `Signer`, and `Verifier` traits (the same
 shape as `mizchi/converge_audit`, where this package was first developed), so
-real hashers and signers can be plugged in. `examples/cf-room` hosts the MMO
-sample in a Cloudflare Durable Object.
+real hashers and signers can be plugged in. The MMO sample, its simulations,
+and the Cloudflare Durable Object host live in `examples/mmo`.
 
-## Packages
+## Workspace layout
+
+This repository is a `moon.work` workspace with two modules:
+
+```text
+moon.work                 members: ".", "./examples/mmo"
+moon.mod                  mizchi/prdt        (the library; only the core)
+src/                      root package: protocol, lattices, finalizers, snapshots
+src/contracts/            proved pure functions (moon prove)
+src/runtime/              PRNG, network, checkpoint store, replica, quorum agent, simulator
+examples/mmo/moon.mod     mizchi/prdt_mmo    (sample; depends on mizchi/prdt)
+examples/mmo/src/         MMO domain: world, commands, events, rejections, reducer, scenario
+examples/mmo/src/simulation/   simulator wiring, property / negative / late-policy tests
+examples/mmo/src/worker/  JSON-string bridge exported to JS / wasm-gc
+examples/mmo/cf-room/     Cloudflare Durable Object host (TypeScript, workerd tests)
+```
+
+`moon check`, `moon test`, `moon fmt`, and `moon info` at the root cover both
+modules; `moon` inside `examples/mmo` works on the sample alone. The example
+imports the core as `"mizchi/prdt@0.1.0"`; inside the workspace that resolves
+to the local source, and a published version elsewhere.
 
 | Package | Responsibility |
 | --- | --- |
-| `prdt` | Envelope, canonical JSON + SHA-256 hashing, canonical order, `Domain`, `resolve_batch`, proposal / closure / committed lattices, `Protocol`, `ReplicatedDomain`, finalizers, laws |
-| `mizchi/prdt/mmo` | MMO sample: world, commands, events, rejections, reducer, phase order, reference scenario |
-| `mizchi/prdt/runtime` | Seeded PRNG, adversarial in-memory network, checkpoint store, replica with outbox, quorum agent, randomized simulator (single-authority or quorum mode, compaction, digest anti-entropy with state transfer) |
+| `mizchi/prdt` | Envelope, canonical JSON + SHA-256 hashing, canonical order, `Domain`, `resolve_batch`, proposal / closure / committed lattices, `Protocol`, `ReplicatedDomain`, snapshots, finalizers, laws |
 | `mizchi/prdt/contracts` | Dependency-free pure functions with Why3/Z3-discharged contracts: quorum threshold, compaction arithmetic, decision order, vote-slot join |
-| `mizchi/prdt/mmo/simulation` | MMO wiring for the simulator, scenario generator, property-style and negative tests |
-| `mizchi/prdt/worker` | JSON-string bridge exported to JS / wasm-gc for hosts such as Durable Objects |
+| `mizchi/prdt/runtime` | Seeded PRNG, adversarial in-memory network, checkpoint store, replica with outbox, quorum agent, randomized simulator (single-authority or quorum mode, compaction, digest anti-entropy with state transfer) |
+| `mizchi/prdt_mmo` | MMO sample: world, commands, events, rejections, reducer, phase order, reference scenario |
+| `mizchi/prdt_mmo/simulation` | MMO wiring for the simulator, scenario generator, property-style and negative tests |
+| `mizchi/prdt_mmo/worker` | JSON-string bridge exported to JS / wasm-gc for hosts such as Durable Objects |
 
 Dependencies point one way: `worker -> mmo -> prdt -> contracts`,
-`runtime -> prdt`, `mmo/simulation -> {mmo, runtime, prdt}`, where `prdt` is
-the root package. The domain never
+`runtime -> prdt`, `simulation -> {mmo, runtime, prdt}`. The domain never
 imports the protocol.
 
 ## Layers
 
 ```text
 Runtime  ->  PRDT Protocol  ->  Finalization  ->  Domain
-runtime/     replicated_domain  resolve_batch     domain.mbt, mmo/
+runtime/     replicated_domain  resolve_batch     domain.mbt, examples/mmo/
              proposal_state
              closure, committed_log, finalizer, single_authority, quorum
 ```
@@ -159,17 +178,40 @@ still checked by seeded property tests, not proofs.
 `SharedSecretAuthenticator` is an HMAC-SHA256 MAC for tests and development,
 not a signature.
 
+### JSON encoding
+
+Every transported or persisted type (`Envelope`, `Delta`, certificates,
+votes, `KnowledgeDigest`, `Catchup`, `Snapshot`, `ReplicatedSnapshot`, and
+the MMO commands, events, and world) gets its encoder from
+`derive(ToJson, FromJson)`; the only hand-written codecs are the three
+newtypes `Digest`, `Signature`, and `PublicKey`, which travel as plain
+strings. The conventions are therefore those of MoonBit's deriver:
+
+- structs are objects keyed by field name;
+- enums use `style="legacy"`: `{"$tag": "<Constructor>", ...labelled fields}`,
+  so `Verdict::Accepted(event~)` is `{"$tag": "Accepted", "event": ...}` and
+  `GameRejection::ActorDead` is `{"$tag": "ActorDead"}`;
+- `Option` fields are omitted when `None` (a JSON `null` is rejected);
+- `Map[String, _]` fields are objects.
+
+Hashes never depend on key order: everything is hashed through
+`canonical_json`, which sorts object keys recursively by UTF-16 code units
+(the JCS order; MoonBit's own length-first `String` order is deliberately
+not used). The decoder reports
+the JSON path of the first mismatch (`SnapshotMismatch("delta: ... at
+/proposals/0/command")`).
+
 ## Verified properties
 
 | Property | Where |
 | --- | --- |
-| Domain rules, batch order independence, conflicts, closure uniqueness, prefix conflicts, late commands, forged / malformed / wrong-parent / non-canonical certificates, snapshot restore and tamper detection, quorum assembly and equivocation, compaction to certified boundaries, digest deltas, catchup, unauthenticated / forged / mismatching bases, join across bases | `*_test.mbt` in the root package and `mmo` |
-| Quorum threshold, compaction arithmetic, decision order, vote-slot join | `contracts` (`moon prove`) |
-| `MoveToNextTick` re-issue, `max_moves`, move ledger across restart | `mmo/simulation/late_policy_test.mbt` |
-| Lattice laws for proposal / closure / log / vote / whole state; delivery order, duplication, and merge-tree invariance; snapshot round trip; decision monotonicity under `apply_delta` and `join`; closure uniqueness; prefix safety; late-command finality; domain validity (`Accepted(SkillActivated) => hp > 0 && mp >= cost` immediately before, `hp >= 0`) | `mmo/simulation/property_test.mbt` (seeded generators) |
-| Convergence under reorder, duplication, partition, restart from checkpoint, compaction with certified state transfer, single-authority and quorum closure (3 and 5 replicas, with an equivocating voter), `MoveToNextTick`; reproducibility by seed | `mmo/simulation/simulation_test.mbt`, `late_policy_test.mbt` |
-| Unstable `alive` guard; premature acceptance breaks monotonicity | `prdt/mmo/simulation/negative_test.mbt` |
-| JSON bridge round trip, error reporting, digest sync with certified base transfer | `worker/bridge_test.mbt` |
+| Domain rules, batch order independence, conflicts, closure uniqueness, prefix conflicts, late commands, forged / malformed / wrong-parent / non-canonical certificates, snapshot restore and tamper detection, quorum assembly and equivocation, compaction to certified boundaries, digest deltas, catchup, unauthenticated / forged / mismatching bases, join across bases | `src/*_test.mbt`, `examples/mmo/src/*_test.mbt` |
+| Quorum threshold, compaction arithmetic, decision order, vote-slot join | `src/contracts` (`moon prove`) |
+| `MoveToNextTick` re-issue, `max_moves`, move ledger across restart | `examples/mmo/src/simulation/late_policy_test.mbt` |
+| Lattice laws for proposal / closure / log / vote / whole state; delivery order, duplication, and merge-tree invariance; snapshot round trip; decision monotonicity under `apply_delta` and `join`; closure uniqueness; prefix safety; late-command finality; domain validity (`Accepted(SkillActivated) => hp > 0 && mp >= cost` immediately before, `hp >= 0`) | `examples/mmo/src/simulation/property_test.mbt` (seeded generators) |
+| Convergence under reorder, duplication, partition, restart from checkpoint, compaction with certified state transfer, single-authority and quorum closure (3 and 5 replicas, with an equivocating voter), `MoveToNextTick`; reproducibility by seed | `examples/mmo/src/simulation/simulation_test.mbt`, `late_policy_test.mbt` |
+| Unstable `alive` guard; premature acceptance breaks monotonicity | `examples/mmo/src/simulation/negative_test.mbt` |
+| JSON bridge round trip, error reporting, digest sync with certified base transfer | `examples/mmo/src/worker/bridge_test.mbt`, `examples/mmo/cf-room/test` |
 
 PRDT agreement alone does **not** imply domain validity: every replica could
 consistently accept a dead player's skill. Domain validity is checked
@@ -178,8 +220,9 @@ separately against the state immediately before each accepted command.
 ## Commands
 
 ```sh
-just check          # moon check --target all
-just test           # moon test
+just check          # moon check --target all (both workspace members)
+just test           # moon test (core + examples/mmo)
+just test-mmo       # moon test for examples/mmo only
 just prove          # Why3/Z3 proofs for src/contracts (needs why3 + z3, or `nix develop`)
 just test-cf-room   # Cloudflare Durable Object host (workerd)
 ```

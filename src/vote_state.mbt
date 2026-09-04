@@ -15,7 +15,7 @@ pub(all) struct ClosureVote {
   ordered_command_ids : Array[String]
   ordered_commands_hash : String
   signature : Signature
-} derive(Eq, Debug)
+} derive(Eq, Debug, ToJson, FromJson)
 
 ///|
 pub fn ClosureVote::payload(self : ClosureVote) -> ClosurePayload {
@@ -28,14 +28,7 @@ pub fn ClosureVote::payload(self : ClosureVote) -> ClosurePayload {
 
 ///|
 fn ClosureVote::sort_key(self : ClosureVote) -> String {
-  canonicalize({
-    "voter": self.voter.0.to_json(),
-    "tick": self.tick.to_json(),
-    "parent_decision_hash": self.parent_decision_hash.to_json(),
-    "ordered_command_ids": self.ordered_command_ids.to_json(),
-    "ordered_commands_hash": self.ordered_commands_hash.to_json(),
-    "signature": self.signature.0.to_json(),
-  })
+  canonicalize(self.to_json())
 }
 
 ///|
@@ -224,52 +217,5 @@ pub fn VoteState::slot(
   match self.by_tick.get(tick) {
     Some(slots) => slots.get(voter.0)
     None => None
-  }
-}
-
-///|
-pub impl ToJson for ClosureVote with fn to_json(self) {
-  {
-    "voter": self.voter.0.to_json(),
-    "tick": self.tick.to_json(),
-    "parent_decision_hash": self.parent_decision_hash.to_json(),
-    "ordered_command_ids": self.ordered_command_ids.to_json(),
-    "ordered_commands_hash": self.ordered_commands_hash.to_json(),
-    "signature": self.signature.0.to_json(),
-  }
-}
-
-///|
-pub impl @json.FromJson for ClosureVote with fn from_json(json, path) {
-  guard json is Object(fields) else {
-    raise @json.JsonDecodeError((path, "ClosureVote: expected object"))
-  }
-  let voter : String = @json.from_json(
-    json_field(fields, "voter", path),
-    path=path.add_key("voter"),
-  )
-  let signature : String = @json.from_json(
-    json_field(fields, "signature", path),
-    path=path.add_key("signature"),
-  )
-  {
-    voter: PublicKey(voter),
-    tick: @json.from_json(
-      json_field(fields, "tick", path),
-      path=path.add_key("tick"),
-    ),
-    parent_decision_hash: @json.from_json(
-      json_field(fields, "parent_decision_hash", path),
-      path=path.add_key("parent_decision_hash"),
-    ),
-    ordered_command_ids: @json.from_json(
-      json_field(fields, "ordered_command_ids", path),
-      path=path.add_key("ordered_command_ids"),
-    ),
-    ordered_commands_hash: @json.from_json(
-      json_field(fields, "ordered_commands_hash", path),
-      path=path.add_key("ordered_commands_hash"),
-    ),
-    signature: Signature(signature),
   }
 }

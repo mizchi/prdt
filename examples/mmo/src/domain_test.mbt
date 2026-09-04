@@ -93,9 +93,10 @@ test "world, command, event, and rejection json round-trip" {
   ])
   let decoded : World = @json.from_json(world.to_json())
   assert_eq(decoded, world)
+  // Players encode as an object; canonical JSON sorts the ids for hashing.
   assert_eq(
-    world.to_json().stringify(),
-    "{\"players\":[[\"a\",{\"hp\":4,\"max_hp\":5,\"mp\":6}],[\"b\",{\"hp\":1,\"max_hp\":2,\"mp\":3}]]}",
+    @prdt.canonicalize(world.to_json()),
+    "{\"players\":{\"a\":{\"hp\":4,\"max_hp\":5,\"mp\":6},\"b\":{\"hp\":1,\"max_hp\":2,\"mp\":3}}}",
   )
   let command : GameCommand = @json.from_json(fireball().to_json())
   assert_eq(command, fireball())

@@ -13,7 +13,7 @@
 pub(all) struct Attestation {
   signer : PublicKey
   signature : Signature
-} derive(Eq, Debug)
+} derive(Eq, Debug, ToJson, FromJson)
 
 ///|
 pub(all) struct ClosureCertificate {
@@ -24,7 +24,7 @@ pub(all) struct ClosureCertificate {
   /// Finalizer-specific proof: one attestation for a single authority, a
   /// quorum of attestations for the quorum finalizer.
   attestations : Array[Attestation]
-} derive(Eq, Debug)
+} derive(Eq, Debug, ToJson, FromJson)
 
 ///|
 pub(all) enum ClosureDecision {
@@ -184,67 +184,6 @@ pub impl JoinSemilattice for ClosureMap with fn join(a, b) {
 ///|
 pub impl JoinSemilattice for ClosureMap with fn equivalent(a, b) {
   a.equals(b)
-}
-
-///|
-pub impl ToJson for Attestation with fn to_json(self) {
-  { "signer": self.signer.0.to_json(), "signature": self.signature.0.to_json() }
-}
-
-///|
-pub impl @json.FromJson for Attestation with fn from_json(json, path) {
-  guard json is Object(fields) else {
-    raise @json.JsonDecodeError((path, "Attestation: expected object"))
-  }
-  let signer : String = @json.from_json(
-    json_field(fields, "signer", path),
-    path=path.add_key("signer"),
-  )
-  let signature : String = @json.from_json(
-    json_field(fields, "signature", path),
-    path=path.add_key("signature"),
-  )
-  { signer: PublicKey(signer), signature: Signature(signature) }
-}
-
-///|
-pub impl ToJson for ClosureCertificate with fn to_json(self) {
-  {
-    "tick": self.tick.to_json(),
-    "parent_decision_hash": self.parent_decision_hash.to_json(),
-    "ordered_command_ids": self.ordered_command_ids.to_json(),
-    "ordered_commands_hash": self.ordered_commands_hash.to_json(),
-    "attestations": self.attestations.to_json(),
-  }
-}
-
-///|
-pub impl @json.FromJson for ClosureCertificate with fn from_json(json, path) {
-  guard json is Object(fields) else {
-    raise @json.JsonDecodeError((path, "ClosureCertificate: expected object"))
-  }
-  {
-    tick: @json.from_json(
-      json_field(fields, "tick", path),
-      path=path.add_key("tick"),
-    ),
-    parent_decision_hash: @json.from_json(
-      json_field(fields, "parent_decision_hash", path),
-      path=path.add_key("parent_decision_hash"),
-    ),
-    ordered_command_ids: @json.from_json(
-      json_field(fields, "ordered_command_ids", path),
-      path=path.add_key("ordered_command_ids"),
-    ),
-    ordered_commands_hash: @json.from_json(
-      json_field(fields, "ordered_commands_hash", path),
-      path=path.add_key("ordered_commands_hash"),
-    ),
-    attestations: @json.from_json(
-      json_field(fields, "attestations", path),
-      path=path.add_key("attestations"),
-    ),
-  }
 }
 
 ///|

@@ -1,15 +1,16 @@
 /**
- * Loader for the MoonBit PRDT bridge (`src/prdt/worker` compiled with
- * `moon build --target js --release`). Every bridge function is a pure
+ * Loader for the MoonBit PRDT bridge (`examples/mmo/src/worker`, package
+ * `mizchi/prdt_mmo/worker`, compiled with `moon build --target js --release`
+ * into the workspace `_build`). Every bridge function is a pure
  * transformation over JSON strings; this module only adds types.
  */
-type BridgeModule = typeof import("../../../_build/js/release/build/worker/worker.js");
+type BridgeModule = typeof import("../../../../_build/js/release/build/mizchi/prdt_mmo/worker/worker.js");
 
 let bridgeModule: BridgeModule | undefined;
 
 export async function loadBridge(): Promise<BridgeModule> {
   if (bridgeModule === undefined) {
-    bridgeModule = await import("../../../_build/js/release/build/worker/worker.js");
+    bridgeModule = await import("../../../../_build/js/release/build/mizchi/prdt_mmo/worker/worker.js");
   }
   return bridgeModule;
 }
