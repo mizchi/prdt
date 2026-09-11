@@ -27,16 +27,16 @@ fn counter_env(replica : String, seq : Int, amount : Int) -> Envelope[Int] {
 
 ///|
 test "resolve_batch validates each command against the state before it" {
-  let hasher = Sha256Hasher::new()
+  let hashing = Hashing::new(Sha256Hasher::new())
   let order = canonical_order(fn(_amount : Int) { 0 })
   let a = counter_env("a", 0, 6)
   let b = counter_env("b", 0, 6)
-  let batch = resolve_batch(0, 0, [b, a], counter_domain(), order, hasher)
+  let batch = resolve_batch(0, 0, [b, a], counter_domain(), order, hashing)
   assert_eq(batch.results.map(fn(r) { r.envelope.id }), ["a:0", "b:0"])
   assert_eq(batch.results[0].verdict, Accepted(event=6))
   assert_eq(batch.results[1].verdict, Rejected(reason="overflow"))
   assert_eq(batch.resulting_state, 6)
-  let same = resolve_batch(0, 0, [a, b], counter_domain(), order, hasher)
+  let same = resolve_batch(0, 0, [a, b], counter_domain(), order, hashing)
   assert_eq(same, batch)
 }
 
@@ -52,10 +52,10 @@ test "resolve_batch rejects foreign ticks and duplicate ids" {
 
 ///|
 fn batch_error(commands : Array[Envelope[Int]]) -> BatchError? {
-  let hasher = Sha256Hasher::new()
+  let hashing = Hashing::new(Sha256Hasher::new())
   let order = canonical_order(fn(_amount : Int) { 0 })
   try {
-    let _ = resolve_batch(0, 0, commands, counter_domain(), order, hasher)
+    let _ = resolve_batch(0, 0, commands, counter_domain(), order, hashing)
     None
   } catch {
     error => Some(error)

@@ -27,6 +27,8 @@ pub fn ClosureVote::payload(self : ClosureVote) -> ClosurePayload {
 }
 
 ///|
+/// Process-local dedup key for equivocation evidence. It never leaves this
+/// replica, so it uses canonical JSON directly instead of the wire codec.
 fn ClosureVote::sort_key(self : ClosureVote) -> String {
   canonicalize(self.to_json())
 }

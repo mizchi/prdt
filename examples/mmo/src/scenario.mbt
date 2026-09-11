@@ -39,7 +39,7 @@ pub fn lethal_hit() -> GameCommand {
 ///|
 pub fn game_protocol(
   finalizer : &@prdt.Finalizer,
-  hasher : &@prdt.Hasher,
+  hashing : @prdt.Hashing,
   initial_world? : World,
   genesis_tick? : Int = 0,
 ) -> GameProtocol {
@@ -51,7 +51,7 @@ pub fn game_protocol(
     game_domain(world),
     game_order(),
     finalizer,
-    hasher,
+    hashing,
     genesis_tick~,
   )
 }

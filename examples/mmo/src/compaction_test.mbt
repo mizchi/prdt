@@ -6,7 +6,7 @@ fn certify_head(
   let certificate = s.authority.certify_base(
     auth.next_tick(),
     auth.decision().head_decision_hash(),
-    @prdt.hash_value(s.hasher, auth.domain_state()),
+    @prdt.hash_value(s.hashing, auth.domain_state()),
   )
   auth.merge({ proposals: [], closures: [], base_certificates: [certificate] })
   certificate
@@ -203,7 +203,7 @@ test "a base without a valid certificate is never adopted" {
   let forged_certificate = forged.authority.certify_base(
     3,
     catchup.base.decision_hash,
-    @prdt.hash_value(s.hasher, catchup.base.state),
+    @prdt.hash_value(s.hashing, catchup.base.state),
   )
   let outcome2 = try {
     victim.apply_catchup({ ..catchup, certificate: Some(forged_certificate) })
@@ -236,7 +236,7 @@ test "compaction without a certified boundary is a no-op, and a conflicting cert
   let bogus = s.authority.certify_base(
     2,
     "wrong-hash",
-    @prdt.hash_value(s.hasher, auth.domain_state()),
+    @prdt.hash_value(s.hashing, auth.domain_state()),
   )
   let outcome = try {
     auth.merge({ proposals: [], closures: [], base_certificates: [bogus] })

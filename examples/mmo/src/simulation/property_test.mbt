@@ -129,7 +129,7 @@ test "domain validity: accepted skills had hp > 0 and mp >= cost immediately bef
     for batch in scenario.full.committed().batches() {
       assert_eq(
         batch.result.previous_state_hash,
-        @prdt.hash_value(scenario.protocol.hasher(), world),
+        @prdt.hash_value(scenario.protocol.hashing(), world),
       )
       for resolved in batch.result.results {
         match resolved.verdict {
@@ -157,7 +157,7 @@ test "domain validity: accepted skills had hp > 0 and mp >= cost immediately bef
       }
       assert_eq(
         batch.result.resulting_state_hash,
-        @prdt.hash_value(scenario.protocol.hasher(), world),
+        @prdt.hash_value(scenario.protocol.hashing(), world),
       )
     }
   }

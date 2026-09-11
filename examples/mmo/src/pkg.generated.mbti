@@ -16,7 +16,7 @@ pub fn game_domain(World) -> @prdt.Domain[World, GameCommand, GameEvent, GameRej
 
 pub fn game_order() -> @prdt.CommandOrder[GameCommand]
 
-pub fn game_protocol(&@prdt.Finalizer, &@prdt.Hasher, initial_world? : World, genesis_tick? : Int) -> @prdt.Protocol[World, GameCommand, GameEvent, GameRejection]
+pub fn game_protocol(&@prdt.Finalizer, @prdt.Hashing, initial_world? : World, genesis_tick? : Int) -> @prdt.Protocol[World, GameCommand, GameEvent, GameRejection]
 
 pub fn lethal_hit() -> GameCommand
 

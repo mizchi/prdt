@@ -6,17 +6,17 @@ struct AuthoritySetup {
 
 ///|
 fn authority_setup() -> AuthoritySetup {
-  let hasher = @prdt.Sha256Hasher::new()
+  let hashing = @prdt.Hashing::new(@prdt.Sha256Hasher::new())
   let authenticator = @prdt.SharedSecretAuthenticator::new("authority", "late")
   let finalizer = @prdt.SingleAuthorityFinalizer::new(
-    hasher,
+    hashing,
     authenticator,
     authenticator.public_key(),
   )
   {
-    protocol: @mmo.game_protocol(finalizer, hasher),
+    protocol: @mmo.game_protocol(finalizer, hashing),
     authority: @prdt.ClosureAuthority::new(
-      hasher,
+      hashing,
       authenticator,
       @mmo.game_order(),
     ),

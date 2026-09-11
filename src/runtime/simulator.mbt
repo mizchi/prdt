@@ -385,7 +385,7 @@ pub fn[
     r.decision().head_decision_hash()
   })
   let domain_state_hashes = replicas.map(fn(r) {
-    @prdt.hash_value(protocol.hasher(), r.domain_state())
+    @prdt.hash_value(protocol.hashing(), r.domain_state())
   })
   let all_equal = fn(values : Array[String]) {
     values.iter().all(fn(v) { v == values[0] })

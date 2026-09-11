@@ -211,7 +211,7 @@ fn[S : ToJson, C, E, R] QuorumAgent::vote_bases(
     next_tick,
     self.replica.decision().head_decision_hash(),
     @prdt.hash_value(
-      self.replica.protocol().hasher(),
+      self.replica.protocol().hashing(),
       self.replica.domain_state(),
     ),
   )

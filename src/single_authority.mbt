@@ -7,18 +7,18 @@
 /// authority never signing two certificates for one tick, which the local
 /// `ConflictingClosure` check surfaces but cannot prevent.
 pub struct SingleAuthorityFinalizer {
-  hasher : &Hasher
+  hashing : Hashing
   verifier : &Verifier
   authority : PublicKey
 }
 
 ///|
 pub fn SingleAuthorityFinalizer::new(
-  hasher : &Hasher,
+  hashing : Hashing,
   verifier : &Verifier,
   authority : PublicKey,
 ) -> SingleAuthorityFinalizer {
-  { hasher, verifier, authority }
+  { hashing, verifier, authority }
 }
 
 ///|
@@ -26,10 +26,10 @@ pub impl Finalizer for SingleAuthorityFinalizer with fn verify_closure(
   self,
   certificate,
 ) {
-  if !certificate_shape_ok(self.hasher, certificate) {
+  if !certificate_shape_ok(self.hashing, certificate) {
     return false
   }
-  let digest = ClosurePayload::of(certificate).digest(self.hasher)
+  let digest = ClosurePayload::of(certificate).digest(self.hashing)
   for attestation in certificate.attestations {
     if attestation.signer == self.authority &&
       self.verifier.verify(attestation.signer, digest, attestation.signature) {
@@ -44,7 +44,7 @@ pub impl Finalizer for SingleAuthorityFinalizer with fn verify_base(
   self,
   certificate,
 ) {
-  let digest = BasePayload::of(certificate).digest(self.hasher)
+  let digest = BasePayload::of(certificate).digest(self.hashing)
   for attestation in certificate.attestations {
     if attestation.signer == self.authority &&
       self.verifier.verify(attestation.signer, digest, attestation.signature) {
@@ -57,18 +57,18 @@ pub impl Finalizer for SingleAuthorityFinalizer with fn verify_base(
 ///|
 /// Produces certificates. Held by the authority replica only.
 pub struct ClosureAuthority[C] {
-  hasher : &Hasher
+  hashing : Hashing
   signer : &Signer
   order : CommandOrder[C]
 }
 
 ///|
 pub fn[C] ClosureAuthority::new(
-  hasher : &Hasher,
+  hashing : Hashing,
   signer : &Signer,
   order : CommandOrder[C],
 ) -> ClosureAuthority[C] {
-  { hasher, signer, order }
+  { hashing, signer, order }
 }
 
 ///|
@@ -87,7 +87,10 @@ pub fn[C] ClosureAuthority::close(
   let ordered_command_ids = sort_commands(commands, self.order).map(fn(e) {
     e.id
   })
-  let ordered_commands_hash = hash_command_ids(self.hasher, ordered_command_ids)
+  let ordered_commands_hash = hash_command_ids(
+    self.hashing,
+    ordered_command_ids,
+  )
   let payload : ClosurePayload = {
     tick,
     parent_decision_hash,
@@ -101,7 +104,7 @@ pub fn[C] ClosureAuthority::close(
     attestations: [
       {
         signer: self.signer.public_key(),
-        signature: self.signer.sign(payload.digest(self.hasher)),
+        signature: self.signer.sign(payload.digest(self.hashing)),
       },
     ],
   }
@@ -124,7 +127,7 @@ pub fn[C] ClosureAuthority::certify_base(
     attestations: [
       {
         signer: self.signer.public_key(),
-        signature: self.signer.sign(payload.digest(self.hasher)),
+        signature: self.signer.sign(payload.digest(self.hashing)),
       },
     ],
   }

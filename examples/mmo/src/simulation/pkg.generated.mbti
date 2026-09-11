@@ -8,7 +8,7 @@ import {
 }
 
 // Values
-pub fn generate_scenario(Int) -> Scenario raise
+pub fn generate_scenario(Int, codec? : &@prdt.Codec) -> Scenario raise
 
 pub let players : Array[String]
 
@@ -18,9 +18,9 @@ pub fn random_scenario_command(@runtime.Rng) -> @prdt_mmo.GameCommand
 
 pub fn random_world(@runtime.Rng) -> @prdt_mmo.World
 
-pub fn run_mmo_quorum_simulation(seed~ : Int, steps? : Int, replica_count? : Int, equivocators? : Array[Int], compaction_retain? : Int) -> @runtime.SimulationReport raise
+pub fn run_mmo_quorum_simulation(seed~ : Int, steps? : Int, replica_count? : Int, equivocators? : Array[Int], compaction_retain? : Int, codec? : &@prdt.Codec) -> @runtime.SimulationReport raise
 
-pub fn run_mmo_simulation(seed~ : Int, steps? : Int, replica_count? : Int, compaction_retain? : Int, late_policy? : @runtime.LateCommandPolicy) -> @runtime.SimulationReport raise @prdt.ProtocolError
+pub fn run_mmo_simulation(seed~ : Int, steps? : Int, replica_count? : Int, compaction_retain? : Int, late_policy? : @runtime.LateCommandPolicy, codec? : &@prdt.Codec) -> @runtime.SimulationReport raise @prdt.ProtocolError
 
 pub let scenario_players : Array[String]
 

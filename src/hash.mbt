@@ -11,9 +11,17 @@ pub fn Sha256Hasher::new() -> Sha256Hasher {
 }
 
 ///|
-pub impl Hasher for Sha256Hasher with fn hash_string(self, value) {
+pub impl Hasher for Sha256Hasher with fn hash_bytes(self, value) {
   ignore(self)
-  Digest(bytes_to_lower_hex(@hash.sha256(@utf8.encode(value[:]))))
+  Digest(bytes_to_lower_hex(@hash.sha256(value)))
+}
+
+///|
+/// Hash of the UTF-8 encoding of a string. For text that is already a
+/// finished byte sequence (a test vector, a key); documents go through a
+/// `Codec` instead.
+pub fn hash_string(hasher : &Hasher, value : String) -> Digest {
+  hasher.hash_bytes(@utf8.encode(value[:]))
 }
 
 ///|

@@ -15,7 +15,9 @@ pub(all) struct PublicKey(String) derive(Eq, Hash, Debug)
 
 ///|
 pub(open) trait Hasher {
-  fn hash_string(Self, String) -> Digest
+  /// Hashes raw bytes. Whatever produced those bytes (a `Codec`, a file, a
+  /// key) is not this trait's concern.
+  fn hash_bytes(Self, Bytes) -> Digest
 }
 
 ///|

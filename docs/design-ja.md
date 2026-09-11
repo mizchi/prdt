@@ -122,16 +122,54 @@ equivocation 吸収）。実行コードはこれらの関数を呼ぶ（`Quorum
 証明書の同一性は payload（tick・親 hash・id 列）で定義し、attestation の組み合わせが違っても同じ決定とみなす。
 安全性は投票 lattice と過半数 threshold から従う。liveness は best effort（leader election や view change は無い）
 
-### JSON エンコーディング
+### エンコーディング（形と表現の分離）
+
+```text
+値 --derive(ToJson)--> Json ドキュメント --Codec--> バイト列
+```
 
 転送・永続化される型（`Envelope`・`Delta`・各証明書・投票・`KnowledgeDigest`・`Catchup`・
-`Snapshot`・`ReplicatedSnapshot`、MMO の command / event / world）はすべて
-`derive(ToJson, FromJson)` で codec を得る。手書きの codec は `Digest` / `Signature` / `PublicKey` の
-3 つの newtype だけで、これらは素の文字列として流れる。enum は `style="legacy"` で
-`{"$tag": "<Constructor>", ...ラベル付きフィールド}`、`Option` フィールドは `None` のとき省略
-（`null` は不正）、`Map[String, _]` はオブジェクトになる。hash は必ず `canonical_json`
-（キーを再帰的にソート）を通すので、エンコード時のキー順に依存しない。decode 失敗は
-`SnapshotMismatch` に JSON path 付きで報告される。
+`Snapshot`・`ReplicatedSnapshot`、MMO の command / event / world）は
+`derive(ToJson, FromJson)` で**形**だけを宣言する。手書きなのは `Digest` / `Signature` /
+`PublicKey` の 3 つの newtype（素の文字列）だけ。enum は `style="legacy"` の
+`{"$tag": "<Constructor>", ...}`、`Option` は `None` のとき省略（`null` は不正）、
+`Map[String, _]` はオブジェクトになる。
+
+その**バイト表現**を決めるのが `Codec` で、標準で 2 つ用意している。プロトコル本体は
+どちらを使っているかに依存しない。
+
+| Codec | バイト列 | 用途 |
+| --- | --- | --- |
+| `json_codec`（既定） | canonical JSON テキスト（UTF-8） | 可読。ホスト側からそのまま覗ける |
+| `binary_codec` | タグ + varint 整数 + 長さ前置き文字列 + 16 進ダイジェストの生バイト化 | 小さい。転送と保存のコスト削減 |
+
+メッセージのバイト数は digest / signature / state hash が支配していて、これらは 64 文字の
+lowercase hex（実体は 32 バイト）である。`binary_codec` はこれを生バイトで持ち、decode 時に同じ
+文字列へ戻す。実トラフィックでの差はほぼこれで決まる。
+
+| 致死 race のメッセージ | `json_codec` | `binary_codec` |
+| --- | --- | --- |
+| replica snapshot | 2067 B | 1517 B |
+| gossip delta | 678 B | 508 B |
+
+`Codec` の契約は canonical であること（値として等しいドキュメントは同一バイト列に、
+オブジェクトキーは UTF-16 コード単位順）。これによりエンコード結果をそのまま hash / 署名対象に
+できる。`Hashing` は「ハッシュ関数 + そのバイト列を作る codec」の組で、`Protocol` と finalizer は
+これを受け取る。片方だけ差し替えて hash と転送がずれることが構造的に起きない。
+
+```moonbit
+let hashing = @prdt.Hashing::new(@prdt.Sha256Hasher::new())         // JSON
+let hashing = @prdt.Hashing::new(hasher, codec=@prdt.binary_codec)  // バイナリ
+```
+
+digest はエンコード済みバイト列のハッシュなので、codec を替えると全 digest が一貫して変わる。
+replica 間で hash 関数を揃える必要があるのと同じ意味で、codec も揃える必要がある。
+別の codec で書かれた snapshot は誤読されず `SnapshotMismatch` で拒否され、decode 失敗は
+JSON path 付きで報告される。
+
+equivocation の重複排除や投票のグルーピングに使う**プロセスローカルな鍵**は意図的に codec を
+通さない。replica の外に出ないので canonical JSON のままにして、lattice の join を
+エンコーディング非依存に保つ。
 
 ## 検証
 
