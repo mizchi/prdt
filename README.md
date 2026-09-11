@@ -42,7 +42,7 @@ to the local source, and a published version elsewhere.
 
 | Package | Responsibility |
 | --- | --- |
-| `mizchi/prdt` | Envelope, canonical JSON + SHA-256 hashing, canonical order, `Domain`, `resolve_batch`, proposal / closure / committed lattices, `Protocol`, `ReplicatedDomain`, snapshots, finalizers, laws |
+| `mizchi/prdt` | Envelope, pluggable encoding (`Codec`: canonical JSON or binary) with SHA-256 `Hashing`, canonical order, `Domain`, `resolve_batch`, proposal / closure / committed lattices, `Protocol`, `ReplicatedDomain`, snapshots, finalizers, laws |
 | `mizchi/prdt/contracts` | Dependency-free pure functions with Why3/Z3-discharged contracts: quorum threshold, compaction arithmetic, decision order, vote-slot join |
 | `mizchi/prdt/runtime` | Seeded PRNG, adversarial in-memory network, checkpoint store, replica with outbox, quorum agent, randomized simulator (single-authority or quorum mode, compaction, digest anti-entropy with state transfer) |
 | `mizchi/prdt_mmo` | MMO sample: world, commands, events, rejections, reducer, phase order, reference scenario |
@@ -60,6 +60,8 @@ Runtime  ->  PRDT Protocol  ->  Finalization  ->  Domain
 runtime/     replicated_domain  resolve_batch     domain.mbt, examples/mmo/
              proposal_state
              closure, committed_log, finalizer, single_authority, quorum
+
+             codec, canonical  (encoding and hashing, used by every layer)
 ```
 
 ### Domain
@@ -178,28 +180,73 @@ still checked by seeded property tests, not proofs.
 `SharedSecretAuthenticator` is an HMAC-SHA256 MAC for tests and development,
 not a signature.
 
-### JSON encoding
+### Encoding
+
+Shape and byte representation are separate concerns:
+
+```text
+value --derive(ToJson)--> Json document --Codec--> Bytes
+```
 
 Every transported or persisted type (`Envelope`, `Delta`, certificates,
 votes, `KnowledgeDigest`, `Catchup`, `Snapshot`, `ReplicatedSnapshot`, and
-the MMO commands, events, and world) gets its encoder from
-`derive(ToJson, FromJson)`; the only hand-written codecs are the three
-newtypes `Digest`, `Signature`, and `PublicKey`, which travel as plain
-strings. The conventions are therefore those of MoonBit's deriver:
+the MMO commands, events, and world) declares its **shape** with
+`derive(ToJson, FromJson)`; the only hand-written ones are the three newtypes
+`Digest`, `Signature`, and `PublicKey`, which travel as plain strings. The
+shape conventions are MoonBit's deriver:
 
 - structs are objects keyed by field name;
 - enums use `style="legacy"`: `{"$tag": "<Constructor>", ...labelled fields}`,
   so `Verdict::Accepted(event~)` is `{"$tag": "Accepted", "event": ...}` and
   `GameRejection::ActorDead` is `{"$tag": "ActorDead"}`;
-- `Option` fields are omitted when `None` (a JSON `null` is rejected);
+- `Option` fields are omitted when `None` (an encoded `null` is rejected);
 - `Map[String, _]` fields are objects.
 
-Hashes never depend on key order: everything is hashed through
-`canonical_json`, which sorts object keys recursively by UTF-16 code units
-(the JCS order; MoonBit's own length-first `String` order is deliberately
-not used). The decoder reports
-the JSON path of the first mismatch (`SnapshotMismatch("delta: ... at
-/proposals/0/command")`).
+A **`Codec`** turns that document into bytes. Two ship with the package, and
+nothing in the protocol depends on which one is in use:
+
+| Codec | Bytes | Use |
+| --- | --- | --- |
+| `json_codec` (default) | canonical JSON text, UTF-8 | readable wire and storage, trivially inspectable from any host |
+| `binary_codec` | tagged values, varint integers, length-prefixed strings, hex digests as raw bytes | compact wire and storage |
+
+Every codec must be **canonical**: documents that are equal as values encode
+to identical bytes, with object keys in UTF-16 code-unit order (the JCS order;
+MoonBit's own length-first `String` order is deliberately not used). That is
+what makes the encoded bytes safe to hash and to sign.
+
+Messages are dominated by digests, signatures, and state hashes, which are
+lowercase hex: 64 characters carrying 32 bytes. The binary codec stores those
+bytes directly and rebuilds the same string when decoding, which is most of
+the difference it makes on real traffic:
+
+| Lethal-race message | `json_codec` | `binary_codec` |
+| --- | --- | --- |
+| replica snapshot | 2067 B | 1517 B |
+| gossip delta | 678 B | 508 B |
+
+`Hashing` pairs a `Hasher` with the `Codec` whose bytes it hashes, and it is
+what the protocol and the finalizers are built from, so a deployment cannot
+hash one encoding while transporting another:
+
+```moonbit
+let hashing = @prdt.Hashing::new(@prdt.Sha256Hasher::new())              // JSON
+let hashing = @prdt.Hashing::new(hasher, codec=@prdt.binary_codec)       // binary
+let protocol = @prdt.Protocol::new(domain, order, finalizer, hashing)
+```
+
+`Protocol::encode` / `Protocol::decode`, `snapshot_bytes` / `restore_bytes`
+work in the protocol's own encoding; `snapshot` / `restore` still speak `Json`
+for hosts that want the document itself. Digests are hashes of the encoded
+bytes, so switching codecs changes every digest consistently — replicas must
+agree on the codec, exactly as they must agree on the hash function. A
+snapshot written under one encoding is refused under another rather than
+misread, and decode failures report where they went wrong
+(`SnapshotMismatch("delta: ... at /proposals/0/command")`).
+
+Process-local keys (equivocation dedup, vote grouping) deliberately do not go
+through the codec: they never leave the replica, so they stay on canonical
+JSON and keep the lattice joins free of any encoding dependency.
 
 ## Verified properties
 
@@ -212,6 +259,9 @@ the JSON path of the first mismatch (`SnapshotMismatch("delta: ... at
 | Convergence under reorder, duplication, partition, restart from checkpoint, compaction with certified state transfer, single-authority and quorum closure (3 and 5 replicas, with an equivocating voter), `MoveToNextTick`; reproducibility by seed | `examples/mmo/src/simulation/simulation_test.mbt`, `late_policy_test.mbt` |
 | Unstable `alive` guard; premature acceptance breaks monotonicity | `examples/mmo/src/simulation/negative_test.mbt` |
 | JSON bridge round trip, error reporting, digest sync with certified base transfer | `examples/mmo/src/worker/bridge_test.mbt`, `examples/mmo/cf-room/test` |
+| Codec round trip over the whole document model, canonicality, compactness, refusal of malformed and truncated input | `src/codec_test.mbt` |
+| Same verdicts and same world under every codec, snapshot and delta round trip as bytes, a snapshot in the wrong encoding is refused | `examples/mmo/src/codec_parity_test.mbt` |
+| Convergence, compaction, state transfer, and quorum closure driven entirely by the binary codec; reproducibility per codec | `examples/mmo/src/simulation/simulation_test.mbt` |
 
 PRDT agreement alone does **not** imply domain validity: every replica could
 consistently accept a dead player's skill. Domain validity is checked

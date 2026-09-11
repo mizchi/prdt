@@ -3,28 +3,32 @@ struct Setup {
   protocol : GameProtocol
   authority : @prdt.ClosureAuthority[GameCommand]
   authenticator : @prdt.SharedSecretAuthenticator
-  hasher : @prdt.Sha256Hasher
+  hashing : @prdt.Hashing
 }
 
 ///|
-fn setup(secret? : String, initial_world? : World) -> Setup {
-  let hasher = @prdt.Sha256Hasher::new()
+fn setup(
+  secret? : String,
+  initial_world? : World,
+  codec? : &@prdt.Codec,
+) -> Setup {
+  let hashing = @prdt.Hashing::new(@prdt.Sha256Hasher::new(), codec?)
   let authenticator = @prdt.SharedSecretAuthenticator::new(
     "authority",
     secret.unwrap_or("test-secret"),
   )
   let finalizer = @prdt.SingleAuthorityFinalizer::new(
-    hasher,
+    hashing,
     authenticator,
     authenticator.public_key(),
   )
-  let protocol = game_protocol(finalizer, hasher, initial_world?)
+  let protocol = game_protocol(finalizer, hashing, initial_world?)
   let authority = @prdt.ClosureAuthority::new(
-    hasher,
+    hashing,
     authenticator,
     game_order(),
   )
-  { protocol, authority, authenticator, hasher }
+  { protocol, authority, authenticator, hashing }
 }
 
 ///|
@@ -181,7 +185,7 @@ test "malformed, wrong-parent, and non-canonical certificates are refused" {
   let payload : @prdt.ClosurePayload = {
     tick: 0,
     parent_decision_hash: s.protocol.genesis_hash(),
-    ordered_commands_hash: @prdt.hash_command_ids(s.hasher, swapped_ids),
+    ordered_commands_hash: @prdt.hash_command_ids(s.hashing, swapped_ids),
   }
   let swapped : @prdt.ClosureCertificate = {
     tick: 0,
@@ -191,7 +195,7 @@ test "malformed, wrong-parent, and non-canonical certificates are refused" {
     attestations: [
       {
         signer: s.authenticator.public_key(),
-        signature: s.authenticator.sign(payload.digest(s.hasher)),
+        signature: s.authenticator.sign(payload.digest(s.hashing)),
       },
     ],
   }
@@ -264,12 +268,13 @@ test "a tampered snapshot is refused" {
 fn quorum_setup(
   ids : Array[String],
   threshold : Int,
+  codec? : &@prdt.Codec,
 ) -> (
   @prdt.QuorumRoster,
   Map[String, @prdt.SharedSecretAuthenticator],
-  @prdt.Sha256Hasher,
+  @prdt.Hashing,
 ) raise Error {
-  let hasher = @prdt.Sha256Hasher::new()
+  let hashing = @prdt.Hashing::new(@prdt.Sha256Hasher::new(), codec?)
   let auths : Map[String, @prdt.SharedSecretAuthenticator] = Map([])
   for id in ids {
     auths[id] = @prdt.SharedSecretAuthenticator::new(id, "key-" + id)
@@ -278,7 +283,7 @@ fn quorum_setup(
     ids.map(fn(id) { @prdt.PublicKey(id) }),
     threshold,
   )
-  (roster, auths, hasher)
+  (roster, auths, hashing)
 }
 
 ///|
@@ -302,16 +307,16 @@ impl @prdt.Verifier for RosterVerifier with fn verify(
 
 ///|
 test "quorum finalizer closes with two of three votes and drives the domain" {
-  let (roster, auths, hasher) = quorum_setup(["a", "b", "c"], 2)
+  let (roster, auths, hashing) = quorum_setup(["a", "b", "c"], 2)
   let verifier = RosterVerifier::{ auths, }
-  let finalizer = @prdt.QuorumFinalizer::new(hasher, verifier, roster)
-  let protocol = game_protocol(finalizer, hasher)
+  let finalizer = @prdt.QuorumFinalizer::new(hashing, verifier, roster)
+  let protocol = game_protocol(finalizer, hashing)
   let object = @prdt.ReplicatedDomain::new(protocol, "R")
   let skill = env("X", 0, 0, fireball())
   let damage = env("Y", 0, 0, lethal_hit())
   object.merge(proposals([skill, damage]))
   let voter = fn(id : String) {
-    @prdt.Voter::new(hasher, auths.get(id).unwrap(), game_order())
+    @prdt.Voter::new(hashing, auths.get(id).unwrap(), game_order())
   }
   let mut votes = @prdt.VoteState::empty()
   votes = votes.add(
@@ -346,7 +351,7 @@ test "quorum finalizer closes with two of three votes and drives the domain" {
       certificate.attestations[0],
       {
         signer: outsider.public_key(),
-        signature: outsider.sign(payload.digest(hasher)),
+        signature: outsider.sign(payload.digest(hashing)),
       },
     ],
   }
@@ -355,10 +360,10 @@ test "quorum finalizer closes with two of three votes and drives the domain" {
 
 ///|
 test "an equivocating voter is excluded so competing payloads cannot both close a tick" {
-  let (roster, auths, hasher) = quorum_setup(["a", "b", "c"], 2)
+  let (roster, auths, hashing) = quorum_setup(["a", "b", "c"], 2)
   let genesis = "g"
   let voter = fn(id : String) {
-    @prdt.Voter::new(hasher, auths.get(id).unwrap(), game_order())
+    @prdt.Voter::new(hashing, auths.get(id).unwrap(), game_order())
   }
   let damage = env("Y", 0, 0, lethal_hit())
   let skill = env("X", 0, 0, fireball())

@@ -20,8 +20,8 @@ pub(all) suberror BatchError {
 } derive(Eq, Debug)
 
 ///|
-pub fn hash_command_ids(hasher : &Hasher, ids : Array[String]) -> String {
-  hash_json(hasher, Json::array(ids.map(fn(id) { id.to_json() })))
+pub fn hash_command_ids(hashing : Hashing, ids : Array[String]) -> String {
+  hashing.hash_json(Json::array(ids.map(fn(id) { id.to_json() })))
 }
 
 ///|
@@ -31,7 +31,7 @@ pub fn[S : ToJson, C, E, R] resolve_batch(
   commands : Array[Envelope[C]],
   domain : Domain[S, C, E, R],
   order : CommandOrder[C],
-  hasher : &Hasher,
+  hashing : Hashing,
 ) -> ResolvedBatch[S, C, E, R] raise BatchError {
   for envelope in commands {
     if envelope.tick != tick {
@@ -59,10 +59,10 @@ pub fn[S : ToJson, C, E, R] resolve_batch(
   }
   {
     tick,
-    previous_state_hash: hash_value(hasher, previous_state),
-    ordered_command_hash: hash_command_ids(hasher, ordered.map(fn(e) { e.id })),
+    previous_state_hash: hashing.hash_value(previous_state),
+    ordered_command_hash: hash_command_ids(hashing, ordered.map(fn(e) { e.id })),
     results,
     resulting_state: state,
-    resulting_state_hash: hash_value(hasher, state),
+    resulting_state_hash: hashing.hash_value(state),
   }
 }

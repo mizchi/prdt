@@ -30,30 +30,32 @@ pub fn ClosurePayload::of(certificate : ClosureCertificate) -> ClosurePayload {
 }
 
 ///|
-/// Domain-separated canonical statement that closure signatures cover.
-pub fn ClosurePayload::message(self : ClosurePayload) -> String {
-  canonicalize({
+/// Domain-separated statement that closure signatures cover. The `domain`
+/// field keeps a closure signature from being replayed as any other kind of
+/// signature.
+pub fn ClosurePayload::statement(self : ClosurePayload) -> Json {
+  {
     "domain": closure_message_domain.to_json(),
     "tick": self.tick.to_json(),
     "parent_decision_hash": self.parent_decision_hash.to_json(),
     "ordered_commands_hash": self.ordered_commands_hash.to_json(),
-  })
+  }
 }
 
 ///|
 pub fn ClosurePayload::digest(
   self : ClosurePayload,
-  hasher : &Hasher,
+  hashing : Hashing,
 ) -> Digest {
-  hasher.hash_string(self.message())
+  hashing.hash_bytes(hashing.codec.encode(self.statement()))
 }
 
 ///|
 /// Every finalizer verifies the same structural facts before its own rule.
 pub fn certificate_shape_ok(
-  hasher : &Hasher,
+  hashing : Hashing,
   certificate : ClosureCertificate,
 ) -> Bool {
-  hash_command_ids(hasher, certificate.ordered_command_ids) ==
+  hash_command_ids(hashing, certificate.ordered_command_ids) ==
   certificate.ordered_commands_hash
 }

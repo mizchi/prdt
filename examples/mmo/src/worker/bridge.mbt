@@ -20,16 +20,16 @@ fn open_room(
   secret : String,
   replica_id : String,
 ) -> Room raise @prdt.ProtocolError {
-  let hasher = @prdt.Sha256Hasher::new()
+  let hashing = @prdt.Hashing::new(@prdt.Sha256Hasher::new())
   let authenticator = @prdt.SharedSecretAuthenticator::new("authority", secret)
   let finalizer = @prdt.SingleAuthorityFinalizer::new(
-    hasher,
+    hashing,
     authenticator,
     authenticator.public_key(),
   )
-  let protocol = @mmo.game_protocol(finalizer, hasher)
+  let protocol = @mmo.game_protocol(finalizer, hashing)
   let authority = @prdt.ClosureAuthority::new(
-    hasher,
+    hashing,
     authenticator,
     @mmo.game_order(),
   )
@@ -207,7 +207,7 @@ pub fn prdt_mmo_close(
       room.object.next_tick(),
       room.object.decision().head_decision_hash(),
       @prdt.hash_value(
-        room.object.protocol().hasher(),
+        room.object.protocol().hashing(),
         room.object.domain_state(),
       ),
     )

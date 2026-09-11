@@ -57,26 +57,26 @@ pub fn QuorumRoster::threshold(self : QuorumRoster) -> Int {
 
 ///|
 pub struct QuorumFinalizer {
-  hasher : &Hasher
+  hashing : Hashing
   verifier : &Verifier
   roster : QuorumRoster
 }
 
 ///|
 pub fn QuorumFinalizer::new(
-  hasher : &Hasher,
+  hashing : Hashing,
   verifier : &Verifier,
   roster : QuorumRoster,
 ) -> QuorumFinalizer {
-  { hasher, verifier, roster }
+  { hashing, verifier, roster }
 }
 
 ///|
 pub impl Finalizer for QuorumFinalizer with fn verify_closure(self, certificate) {
-  if !certificate_shape_ok(self.hasher, certificate) {
+  if !certificate_shape_ok(self.hashing, certificate) {
     return false
   }
-  let digest = ClosurePayload::of(certificate).digest(self.hasher)
+  let digest = ClosurePayload::of(certificate).digest(self.hashing)
   let accepted : Map[String, Unit] = Map([])
   for attestation in certificate.attestations {
     if accepted.contains(attestation.signer.0) {
@@ -95,18 +95,18 @@ pub impl Finalizer for QuorumFinalizer with fn verify_closure(self, certificate)
 ///|
 /// A roster member that signs closure votes.
 pub struct Voter[C] {
-  hasher : &Hasher
+  hashing : Hashing
   signer : &Signer
   order : CommandOrder[C]
 }
 
 ///|
 pub fn[C] Voter::new(
-  hasher : &Hasher,
+  hashing : Hashing,
   signer : &Signer,
   order : CommandOrder[C],
 ) -> Voter[C] {
-  { hasher, signer, order }
+  { hashing, signer, order }
 }
 
 ///|
@@ -119,7 +119,10 @@ pub fn[C] Voter::vote(
   let ordered_command_ids = sort_commands(commands, self.order).map(fn(e) {
     e.id
   })
-  let ordered_commands_hash = hash_command_ids(self.hasher, ordered_command_ids)
+  let ordered_commands_hash = hash_command_ids(
+    self.hashing,
+    ordered_command_ids,
+  )
   let payload : ClosurePayload = {
     tick,
     parent_decision_hash,
@@ -131,7 +134,7 @@ pub fn[C] Voter::vote(
     parent_decision_hash,
     ordered_command_ids,
     ordered_commands_hash,
-    signature: self.signer.sign(payload.digest(self.hasher)),
+    signature: self.signer.sign(payload.digest(self.hashing)),
   }
 }
 
@@ -186,13 +189,13 @@ pub fn QuorumFinalizer::verify_vote(
   if !self.roster.members.contains(vote.voter) {
     return false
   }
-  if hash_command_ids(self.hasher, vote.ordered_command_ids) !=
+  if hash_command_ids(self.hashing, vote.ordered_command_ids) !=
     vote.ordered_commands_hash {
     return false
   }
   self.verifier.verify(
     vote.voter,
-    vote.payload().digest(self.hasher),
+    vote.payload().digest(self.hashing),
     vote.signature,
   )
 }
@@ -209,7 +212,7 @@ pub fn[C] Voter::public_key(self : Voter[C]) -> PublicKey {
 
 ///|
 pub impl Finalizer for QuorumFinalizer with fn verify_base(self, certificate) {
-  let digest = BasePayload::of(certificate).digest(self.hasher)
+  let digest = BasePayload::of(certificate).digest(self.hashing)
   let accepted : Map[String, Unit] = Map([])
   for attestation in certificate.attestations {
     if accepted.contains(attestation.signer.0) {
@@ -233,7 +236,7 @@ pub fn QuorumFinalizer::verify_base_vote(
   self.roster.members.contains(vote.voter) &&
   self.verifier.verify(
     vote.voter,
-    vote.payload().digest(self.hasher),
+    vote.payload().digest(self.hashing),
     vote.signature,
   )
 }
@@ -251,6 +254,6 @@ pub fn[C] Voter::vote_base(
     next_tick,
     decision_hash,
     state_hash,
-    signature: self.signer.sign(payload.digest(self.hasher)),
+    signature: self.signer.sign(payload.digest(self.hashing)),
   }
 }

@@ -89,3 +89,40 @@ test "simulation is reproducible by seed" {
     run_mmo_quorum_simulation(seed=7),
   )
 }
+
+///|
+test "the binary codec drives the whole runtime, not just the wire" {
+  // Every digest, certificate, snapshot, and state transfer in these runs is
+  // produced by the binary encoding rather than JSON.
+  let mut closures = 0
+  let mut compactions = 0
+  for seed in 1..<=12 {
+    let report = run_mmo_simulation(seed~, codec=@prdt.binary_codec)
+    assert_converged(report)
+    closures += report.counters.closures
+    let compacted = run_mmo_simulation(
+      seed~,
+      compaction_retain=2,
+      codec=@prdt.binary_codec,
+    )
+    assert_converged(compacted)
+    compactions += compacted.counters.compactions
+  }
+  assert_true(closures > 0)
+  assert_true(compactions > 0)
+  for seed in 1..<=6 {
+    assert_converged(run_mmo_quorum_simulation(seed~, codec=@prdt.binary_codec))
+  }
+}
+
+///|
+test "a run is reproducible under each codec and the codec changes the hashes" {
+  let json_report = run_mmo_simulation(seed=7)
+  let binary_report = run_mmo_simulation(seed=7, codec=@prdt.binary_codec)
+  assert_eq(json_report, run_mmo_simulation(seed=7))
+  assert_eq(binary_report, run_mmo_simulation(seed=7, codec=@prdt.binary_codec))
+  // Same schedule, same counters; different encoding, different digests.
+  assert_eq(binary_report.counters, json_report.counters)
+  assert_eq(binary_report.next_ticks, json_report.next_ticks)
+  assert_not_eq(binary_report.state_hashes, json_report.state_hashes)
+}

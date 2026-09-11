@@ -74,20 +74,20 @@ struct Setup {
 }
 
 ///|
-fn setup() -> Setup {
-  let hasher = @prdt.Sha256Hasher::new()
+fn setup(codec? : &@prdt.Codec) -> Setup {
+  let hashing = @prdt.Hashing::new(@prdt.Sha256Hasher::new(), codec?)
   let authenticator = @prdt.SharedSecretAuthenticator::new(
     "authority", "negative",
   )
   let finalizer = @prdt.SingleAuthorityFinalizer::new(
-    hasher,
+    hashing,
     authenticator,
     authenticator.public_key(),
   )
   {
-    protocol: @mmo.game_protocol(finalizer, hasher),
+    protocol: @mmo.game_protocol(finalizer, hashing),
     authority: @prdt.ClosureAuthority::new(
-      hasher,
+      hashing,
       authenticator,
       @mmo.game_order(),
     ),
@@ -152,7 +152,7 @@ fn eager_decision(
     known,
     protocol.domain(),
     protocol.order(),
-    protocol.hasher(),
+    protocol.hashing(),
   )
   let out : Map[
     String,

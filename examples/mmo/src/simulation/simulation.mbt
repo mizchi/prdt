@@ -33,21 +33,22 @@ pub fn run_mmo_simulation(
   replica_count? : Int = 3,
   compaction_retain? : Int,
   late_policy? : @runtime.LateCommandPolicy = RejectAsLate,
+  codec? : &@prdt.Codec,
 ) -> @runtime.SimulationReport raise @prdt.ProtocolError {
-  let hasher = @prdt.Sha256Hasher::new()
+  let hashing = @prdt.Hashing::new(@prdt.Sha256Hasher::new(), codec?)
   let authenticator = @prdt.SharedSecretAuthenticator::new("authority", "sim")
   let finalizer = @prdt.SingleAuthorityFinalizer::new(
-    hasher,
+    hashing,
     authenticator,
     authenticator.public_key(),
   )
   let protocol = @mmo.game_protocol(
     finalizer,
-    hasher,
+    hashing,
     initial_world=simulation_world(),
   )
   let authority = @prdt.ClosureAuthority::new(
-    hasher,
+    hashing,
     authenticator,
     @mmo.game_order(),
   )
@@ -73,8 +74,9 @@ pub fn run_mmo_quorum_simulation(
   replica_count? : Int = 3,
   equivocators? : Array[Int] = [],
   compaction_retain? : Int,
+  codec? : &@prdt.Codec,
 ) -> @runtime.SimulationReport raise Error {
-  let hasher = @prdt.Sha256Hasher::new()
+  let hashing = @prdt.Hashing::new(@prdt.Sha256Hasher::new(), codec?)
   let keyed = @prdt.KeyedVerifier::new()
   let members = []
   let voters = []
@@ -83,13 +85,13 @@ pub fn run_mmo_quorum_simulation(
     let authenticator = @prdt.SharedSecretAuthenticator::new(id, "key-" + id)
     keyed.register(authenticator.public_key(), authenticator)
     members.push(authenticator.public_key())
-    voters.push(@prdt.Voter::new(hasher, authenticator, @mmo.game_order()))
+    voters.push(@prdt.Voter::new(hashing, authenticator, @mmo.game_order()))
   }
   let roster = @prdt.QuorumRoster::new(members, replica_count / 2 + 1)
-  let finalizer = @prdt.QuorumFinalizer::new(hasher, keyed, roster)
+  let finalizer = @prdt.QuorumFinalizer::new(hashing, keyed, roster)
   let protocol = @mmo.game_protocol(
     finalizer,
-    hasher,
+    hashing,
     initial_world=simulation_world(),
   )
   @runtime.run_simulation(

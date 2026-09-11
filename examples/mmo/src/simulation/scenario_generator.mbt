@@ -48,21 +48,24 @@ pub fn random_scenario_command(rng : @runtime.Rng) -> @mmo.GameCommand {
 }
 
 ///|
-pub fn generate_scenario(seed : Int) -> Scenario raise Error {
+pub fn generate_scenario(
+  seed : Int,
+  codec? : &@prdt.Codec,
+) -> Scenario raise Error {
   let rng = @runtime.Rng::new(seed)
   let world = random_world(rng)
-  let hasher = @prdt.Sha256Hasher::new()
+  let hashing = @prdt.Hashing::new(@prdt.Sha256Hasher::new(), codec?)
   let authenticator = @prdt.SharedSecretAuthenticator::new(
     "authority", "scenario",
   )
   let finalizer = @prdt.SingleAuthorityFinalizer::new(
-    hasher,
+    hashing,
     authenticator,
     authenticator.public_key(),
   )
-  let protocol = @mmo.game_protocol(finalizer, hasher, initial_world=world)
+  let protocol = @mmo.game_protocol(finalizer, hashing, initial_world=world)
   let authority = @prdt.ClosureAuthority::new(
-    hasher,
+    hashing,
     authenticator,
     @mmo.game_order(),
   )

@@ -16,7 +16,7 @@ pub struct Protocol[S, C, E, R] {
   domain : Domain[S, C, E, R]
   order : CommandOrder[C]
   finalizer : &Finalizer
-  hasher : &Hasher
+  hashing : Hashing
   genesis_tick : Int
   genesis_hash : String
 }
@@ -124,16 +124,16 @@ pub fn[S : ToJson, C, E, R] Protocol::new(
   domain : Domain[S, C, E, R],
   order : CommandOrder[C],
   finalizer : &Finalizer,
-  hasher : &Hasher,
+  hashing : Hashing,
   genesis_tick? : Int = 0,
 ) -> Protocol[S, C, E, R] {
-  let initial_state_hash = hash_value(hasher, (domain.initial_state)())
-  let genesis_hash = hash_json(hasher, {
+  let initial_state_hash = hashing.hash_value((domain.initial_state)())
+  let genesis_hash = hashing.hash_json({
     "genesis": "prdt/genesis/v1",
     "genesis_tick": genesis_tick.to_json(),
     "initial_state_hash": initial_state_hash.to_json(),
   })
-  { domain, order, finalizer, hasher, genesis_tick, genesis_hash }
+  { domain, order, finalizer, hashing, genesis_tick, genesis_hash }
 }
 
 ///|
@@ -149,8 +149,19 @@ pub fn[S, C, E, R] Protocol::genesis_tick(self : Protocol[S, C, E, R]) -> Int {
 }
 
 ///|
+pub fn[S, C, E, R] Protocol::hashing(self : Protocol[S, C, E, R]) -> Hashing {
+  self.hashing
+}
+
+///|
 pub fn[S, C, E, R] Protocol::hasher(self : Protocol[S, C, E, R]) -> &Hasher {
-  self.hasher
+  self.hashing.hasher
+}
+
+///|
+/// Encoding this protocol hashes, transports, and persists with.
+pub fn[S, C, E, R] Protocol::codec(self : Protocol[S, C, E, R]) -> &Codec {
+  self.hashing.codec
 }
 
 ///|
@@ -262,7 +273,7 @@ fn[S, C, E, R] Protocol::validate_certificate_shape(
     }
     seen[id] = ()
   }
-  if !certificate_shape_ok(self.hasher, certificate) {
+  if !certificate_shape_ok(self.hashing, certificate) {
     raise MalformedCertificate(
       certificate.tick,
       "ordered_commands_hash does not match ids",
@@ -309,7 +320,7 @@ fn[S : ToJson, C, E : ToJson, R : ToJson] Protocol::advance(
       envelopes,
       self.domain,
       self.order,
-      self.hasher,
+      self.hashing,
     ) catch {
       BatchTickMismatch(_, _, id) =>
         raise MalformedCertificate(
@@ -328,7 +339,7 @@ fn[S : ToJson, C, E : ToJson, R : ToJson] Protocol::advance(
         { "id": r.envelope.id.to_json(), "verdict": r.verdict.to_json() }
       }),
     )
-    let result_hash = hash_json(self.hasher, {
+    let result_hash = hash_json(self.hashing, {
       "tick": tick.to_json(),
       "parent_decision_hash": parent.to_json(),
       "ordered_commands_hash": certificate.ordered_commands_hash.to_json(),
@@ -430,7 +441,7 @@ fn[S : ToJson, C, E, R] Protocol::check_base_consistency(
 ) -> Unit raise ProtocolError {
   if certificate.next_tick == state.base.next_tick {
     if certificate.decision_hash != state.base.decision_hash ||
-      certificate.state_hash != hash_value(self.hasher, state.base.state) {
+      certificate.state_hash != hash_value(self.hashing, state.base.state) {
       raise ConflictingBase(certificate.next_tick)
     }
     return
@@ -737,7 +748,7 @@ pub fn[S, C : ToJson, E, R] Protocol::state_hash(
   self : Protocol[S, C, E, R],
   state : State[S, C, E, R],
 ) -> String {
-  hash_json(self.hasher, {
+  hash_json(self.hashing, {
     "base": {
       "next_tick": state.base.next_tick.to_json(),
       "decision_hash": state.base.decision_hash.to_json(),
@@ -798,6 +809,15 @@ pub fn[S : ToJson, C : ToJson, E : ToJson, R : ToJson] Protocol::snapshot(
 }
 
 ///|
+/// Persist a snapshot as bytes in this protocol's encoding.
+pub fn[S : ToJson, C : ToJson, E : ToJson, R : ToJson] Protocol::snapshot_bytes(
+  self : Protocol[S, C, E, R],
+  state : State[S, C, E, R],
+) -> Bytes {
+  self.hashing.encode(self.snapshot_of(state))
+}
+
+///|
 fn[T : @json.FromJson] snapshot_decode(
   json : Json,
   what : String,
@@ -820,6 +840,43 @@ pub fn[
   json : Json,
 ) -> State[S, C, E, R] raise ProtocolError {
   self.restore_snapshot(snapshot_decode(json, "snapshot"))
+}
+
+///|
+/// Restore a snapshot from bytes in this protocol's encoding. See
+/// `restore_snapshot` for what is re-derived rather than trusted.
+pub fn[
+  S : ToJson + @json.FromJson,
+  C : Eq + @json.FromJson,
+  E : ToJson + @json.FromJson,
+  R : ToJson + @json.FromJson,
+] Protocol::restore_bytes(
+  self : Protocol[S, C, E, R],
+  bytes : BytesView,
+) -> State[S, C, E, R] raise ProtocolError {
+  self.restore_snapshot(self.decode(bytes, "snapshot"))
+}
+
+///|
+/// Encode anything this protocol transports (a `Delta`, a `Catchup`, a
+/// `KnowledgeDigest`) in its own encoding.
+pub fn[S, C, E, R, T : ToJson] Protocol::encode(
+  self : Protocol[S, C, E, R],
+  value : T,
+) -> Bytes {
+  self.hashing.encode(value)
+}
+
+///|
+/// Decode a transported value, reporting where a malformed one went wrong.
+pub fn[S, C, E, R, T : @json.FromJson] Protocol::decode(
+  self : Protocol[S, C, E, R],
+  bytes : BytesView,
+  what : String,
+) -> T raise ProtocolError {
+  self.hashing.decode(bytes) catch {
+    error => raise SnapshotMismatch(what + ": " + error.message())
+  }
 }
 
 ///|
@@ -1034,6 +1091,19 @@ pub fn[S : ToJson, C : ToJson, E : ToJson, R : ToJson] ReplicatedDomain::snapsho
 }
 
 ///|
+/// Persist this replica as bytes in the protocol's encoding.
+pub fn[S : ToJson, C : ToJson, E : ToJson, R : ToJson] ReplicatedDomain::snapshot_bytes(
+  self : ReplicatedDomain[S, C, E, R],
+) -> Bytes {
+  let snapshot : ReplicatedSnapshot[S, C, E, R] = {
+    state: self.protocol.snapshot_of(self.state),
+    replica_id: self.replica_id,
+    next_local_sequence: self.next_local_sequence,
+  }
+  self.protocol.hashing.encode(snapshot)
+}
+
+///|
 pub fn[
   S : ToJson + @json.FromJson,
   C : Eq + @json.FromJson,
@@ -1045,6 +1115,28 @@ pub fn[
 ) -> ReplicatedDomain[S, C, E, R] raise ProtocolError {
   let snapshot : ReplicatedSnapshot[S, C, E, R] = snapshot_decode(
     json, "replicated snapshot",
+  )
+  {
+    protocol,
+    replica_id: snapshot.replica_id,
+    state: protocol.restore_snapshot(snapshot.state),
+    next_local_sequence: snapshot.next_local_sequence,
+  }
+}
+
+///|
+/// Restore a replica from bytes in the protocol's encoding.
+pub fn[
+  S : ToJson + @json.FromJson,
+  C : Eq + @json.FromJson,
+  E : ToJson + @json.FromJson,
+  R : ToJson + @json.FromJson,
+] ReplicatedDomain::restore_bytes(
+  protocol : Protocol[S, C, E, R],
+  bytes : BytesView,
+) -> ReplicatedDomain[S, C, E, R] raise ProtocolError {
+  let snapshot : ReplicatedSnapshot[S, C, E, R] = protocol.decode(
+    bytes, "replicated snapshot",
   )
   {
     protocol,
@@ -1098,7 +1190,7 @@ pub fn[S : ToJson, C : Eq, E : ToJson, R : ToJson] Protocol::apply_catchup(
     }
     if certificate.next_tick != catchup.base.next_tick ||
       certificate.decision_hash != catchup.base.decision_hash ||
-      certificate.state_hash != hash_value(self.hasher, catchup.base.state) ||
+      certificate.state_hash != hash_value(self.hashing, catchup.base.state) ||
       !self.finalizer.verify_base(certificate) {
       raise UnauthenticatedBase(catchup.base.next_tick)
     }

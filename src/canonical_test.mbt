@@ -10,14 +10,14 @@ test "canonical json sorts object keys recursively and keeps array order" {
 }
 
 ///|
-test "sha256 hasher matches FIPS vectors and hex round-trips" {
+test "sha256 hashing matches FIPS vectors and hex round-trips" {
   let hasher = Sha256Hasher::new()
   assert_eq(
-    hasher.hash_string("").0,
+    hash_string(hasher, "").0,
     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
   )
   assert_eq(
-    hasher.hash_string("abc").0,
+    hash_string(hasher, "abc").0,
     "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
   )
   let bytes = bytes_from_lower_hex("00ff10").unwrap()
@@ -30,12 +30,12 @@ test "shared-secret authenticator verifies only its own key and digest" {
   let hasher = Sha256Hasher::new()
   let auth = SharedSecretAuthenticator::new("authority", "s3cret")
   let other = SharedSecretAuthenticator::new("authority", "different")
-  let digest = hasher.hash_string("payload")
+  let digest = hash_string(hasher, "payload")
   let signature = auth.sign(digest)
   assert_true(auth.verify(auth.public_key(), digest, signature))
   assert_false(auth.verify(@prdt.PublicKey("someone-else"), digest, signature))
   assert_false(
-    auth.verify(auth.public_key(), hasher.hash_string("other"), signature),
+    auth.verify(auth.public_key(), hash_string(hasher, "other"), signature),
   )
   assert_false(other.verify(other.public_key(), digest, signature))
 }

@@ -322,7 +322,7 @@ pub fn[S : ToJson, C : Eq + ToJson, E : ToJson, R : ToJson] Replica::close_next_
   let base_certificate = authority.certify_base(
     self.next_tick(),
     decision.head_decision_hash(),
-    @prdt.hash_value(self.protocol.hasher(), self.domain_state()),
+    @prdt.hash_value(self.protocol.hashing(), self.domain_state()),
   )
   let delta : @prdt.Delta[C] = {
     proposals: [],

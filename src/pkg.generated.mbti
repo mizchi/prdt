@@ -14,6 +14,8 @@ pub fn assemble_quorum_certificate(VoteState, Int, QuorumRoster) -> ClosureCerti
 
 pub let base_message_domain : String
 
+pub let binary_codec : &Codec
+
 pub fn bytes_from_lower_hex(String) -> Bytes?
 
 pub fn bytes_to_lower_hex(Bytes) -> String
@@ -24,7 +26,7 @@ pub fn[C] canonical_order((C) -> Int) -> CommandOrder[C]
 
 pub fn canonicalize(Json) -> String
 
-pub fn certificate_shape_ok(&Hasher, ClosureCertificate) -> Bool
+pub fn certificate_shape_ok(Hashing, ClosureCertificate) -> Bool
 
 pub fn closure_decisions_equivalent(ClosureDecision, ClosureDecision) -> Bool
 
@@ -36,15 +38,23 @@ pub fn command_id(String, Int) -> String
 
 pub fn[E : Eq, R : Eq] decision_less_or_equal(Decision[E, R], Decision[E, R]) -> Bool
 
-pub fn hash_command_ids(&Hasher, Array[String]) -> String
+pub fn[T : @json.FromJson] decode_value(&Codec, BytesView) -> T raise CodecError
 
-pub fn hash_json(&Hasher, Json) -> String
+pub fn[T : ToJson] encode_value(&Codec, T) -> Bytes
 
-pub fn[T : ToJson] hash_value(&Hasher, T) -> String
+pub fn hash_command_ids(Hashing, Array[String]) -> String
+
+pub fn hash_json(Hashing, Json) -> String
+
+pub fn hash_string(&Hasher, String) -> Digest
+
+pub fn[T : ToJson] hash_value(Hashing, T) -> String
 
 pub fn[R] is_prefix_of(CommittedLog[R], CommittedLog[R]) -> Bool
 
 pub fn is_valid_tick(Int) -> Bool
+
+pub let json_codec : &Codec
 
 pub fn[L : JoinSemilattice] lattice_law_violations(L, L, L) -> Array[String] raise ProtocolError
 
@@ -58,7 +68,7 @@ pub fn merge_closure_decisions(ClosureDecision, ClosureDecision) -> ClosureDecis
 
 pub fn merge_voter_slots(VoterSlot, VoterSlot) -> VoterSlot
 
-pub fn[S : ToJson, C, E, R] resolve_batch(Int, S, Array[Envelope[C]], Domain[S, C, E, R], CommandOrder[C], &Hasher) -> ResolvedBatch[S, C, E, R] raise BatchError
+pub fn[S : ToJson, C, E, R] resolve_batch(Int, S, Array[Envelope[C]], Domain[S, C, E, R], CommandOrder[C], Hashing) -> ResolvedBatch[S, C, E, R] raise BatchError
 
 pub let snapshot_version : Int
 
@@ -69,6 +79,11 @@ pub(all) suberror BatchError {
   BatchTickMismatch(Int, Int, String)
   DuplicateCommandId(String)
 } derive(Eq, @debug.Debug)
+
+pub(all) suberror CodecError {
+  MalformedEncoding(String)
+}
+pub fn CodecError::message(Self) -> String
 
 pub(all) suberror ProtocolError {
   ConflictingProposal(String)
@@ -118,9 +133,9 @@ pub(all) struct BasePayload {
   decision_hash : String
   state_hash : String
 } derive(Eq, ToJson, @debug.Debug)
-pub fn BasePayload::digest(Self, &Hasher) -> Digest
-pub fn BasePayload::message(Self) -> String
+pub fn BasePayload::digest(Self, Hashing) -> Digest
 pub fn BasePayload::of(BaseCertificate) -> Self
+pub fn BasePayload::statement(Self) -> Json
 
 pub(all) struct BaseVote {
   voter : PublicKey
@@ -143,6 +158,10 @@ pub fn BaseVoteState::add(Self, BaseVote) -> Self
 pub fn BaseVoteState::empty() -> Self
 pub fn BaseVoteState::prune_below(Self, Int) -> Self
 
+pub struct BinaryCodec {
+}
+pub impl Codec for BinaryCodec
+
 pub(all) struct Catchup[S, C] {
   base : Base[S]
   certificate : BaseCertificate?
@@ -150,13 +169,13 @@ pub(all) struct Catchup[S, C] {
 } derive(ToJson, @json.FromJson)
 
 pub struct ClosureAuthority[C] {
-  hasher : &Hasher
+  hashing : Hashing
   signer : &Signer
   order : CommandOrder[C]
 }
 pub fn[C] ClosureAuthority::certify_base(Self[C], Int, String, String) -> BaseCertificate
 pub fn[C] ClosureAuthority::close(Self[C], Int, String, Array[Envelope[C]]) -> ClosureCertificate raise BatchError
-pub fn[C] ClosureAuthority::new(&Hasher, &Signer, CommandOrder[C]) -> Self[C]
+pub fn[C] ClosureAuthority::new(Hashing, &Signer, CommandOrder[C]) -> Self[C]
 
 pub(all) struct ClosureCertificate {
   tick : Int
@@ -192,9 +211,9 @@ pub(all) struct ClosurePayload {
   parent_decision_hash : String
   ordered_commands_hash : String
 } derive(Eq, @debug.Debug)
-pub fn ClosurePayload::digest(Self, &Hasher) -> Digest
-pub fn ClosurePayload::message(Self) -> String
+pub fn ClosurePayload::digest(Self, Hashing) -> Digest
 pub fn ClosurePayload::of(ClosureCertificate) -> Self
+pub fn ClosurePayload::statement(Self) -> Json
 
 pub(all) struct ClosureVote {
   voter : PublicKey
@@ -276,6 +295,23 @@ pub(all) struct Envelope[C] {
   command : C
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
+pub struct Hashing {
+  hasher : &Hasher
+  codec : &Codec
+}
+pub fn Hashing::codec(Self) -> &Codec
+pub fn[T : @json.FromJson] Hashing::decode(Self, BytesView) -> T raise CodecError
+pub fn[T : ToJson] Hashing::encode(Self, T) -> Bytes
+pub fn Hashing::hash_bytes(Self, Bytes) -> Digest
+pub fn Hashing::hash_json(Self, Json) -> String
+pub fn[T : ToJson] Hashing::hash_value(Self, T) -> String
+pub fn Hashing::hasher(Self) -> &Hasher
+pub fn Hashing::new(&Hasher, codec? : &Codec) -> Self
+
+pub struct JsonCodec {
+}
+pub impl Codec for JsonCodec
+
 pub struct KeyedVerifier {
   verifiers : Map[String, &Verifier]
 }
@@ -316,32 +352,38 @@ pub struct Protocol[S, C, E, R] {
   domain : Domain[S, C, E, R]
   order : CommandOrder[C]
   finalizer : &Finalizer
-  hasher : &Hasher
+  hashing : Hashing
   genesis_tick : Int
   genesis_hash : String
 }
 pub fn[S : ToJson, C : Eq, E : ToJson, R : ToJson] Protocol::apply_catchup(Self[S, C, E, R], State[S, C, E, R], Catchup[S, C]) -> State[S, C, E, R] raise ProtocolError
 pub fn[S : ToJson, C : Eq, E : ToJson, R : ToJson] Protocol::apply_delta(Self[S, C, E, R], State[S, C, E, R], Delta[C]) -> State[S, C, E, R] raise ProtocolError
 pub fn[S, C, E, R] Protocol::catchup_since(Self[S, C, E, R], State[S, C, E, R], KnowledgeDigest) -> Catchup[S, C]
+pub fn[S, C, E, R] Protocol::codec(Self[S, C, E, R]) -> &Codec
 pub fn[S, C, E, R] Protocol::compact(Self[S, C, E, R], State[S, C, E, R], retain_ticks~ : Int) -> State[S, C, E, R] raise ProtocolError
 pub fn[S, C, E, R] Protocol::decision(Self[S, C, E, R], State[S, C, E, R]) -> Decision[E, R]
+pub fn[S, C, E, R, T : @json.FromJson] Protocol::decode(Self[S, C, E, R], BytesView, String) -> T raise ProtocolError
 pub fn[S, C, E, R] Protocol::delta_of(Self[S, C, E, R], State[S, C, E, R]) -> Delta[C]
 pub fn[S, C, E, R] Protocol::delta_since(Self[S, C, E, R], State[S, C, E, R], KnowledgeDigest) -> Delta[C]
 pub fn[S, C, E, R] Protocol::digest(Self[S, C, E, R], State[S, C, E, R]) -> KnowledgeDigest
 pub fn[S, C, E, R] Protocol::domain(Self[S, C, E, R]) -> Domain[S, C, E, R]
 pub fn[S, C, E, R] Protocol::domain_state(Self[S, C, E, R], State[S, C, E, R]) -> S
+pub fn[S, C, E, R, T : ToJson] Protocol::encode(Self[S, C, E, R], T) -> Bytes
 pub fn[S, C, E, R] Protocol::genesis_hash(Self[S, C, E, R]) -> String
 pub fn[S, C, E, R] Protocol::genesis_tick(Self[S, C, E, R]) -> Int
 pub fn[S, C, E, R] Protocol::hasher(Self[S, C, E, R]) -> &Hasher
+pub fn[S, C, E, R] Protocol::hashing(Self[S, C, E, R]) -> Hashing
 pub fn[S, C, E, R] Protocol::initial(Self[S, C, E, R]) -> State[S, C, E, R]
 pub fn[S : ToJson, C : Eq, E : ToJson, R : ToJson] Protocol::join(Self[S, C, E, R], State[S, C, E, R], State[S, C, E, R]) -> State[S, C, E, R] raise ProtocolError
 pub fn[S : ToJson, C : Eq, E : ToJson, R : ToJson] Protocol::lattice_law_violations(Self[S, C, E, R], State[S, C, E, R], State[S, C, E, R], State[S, C, E, R]) -> Array[String] raise ProtocolError
-pub fn[S : ToJson, C, E, R] Protocol::new(Domain[S, C, E, R], CommandOrder[C], &Finalizer, &Hasher, genesis_tick? : Int) -> Self[S, C, E, R]
+pub fn[S : ToJson, C, E, R] Protocol::new(Domain[S, C, E, R], CommandOrder[C], &Finalizer, Hashing, genesis_tick? : Int) -> Self[S, C, E, R]
 pub fn[S, C, E, R] Protocol::next_tick(Self[S, C, E, R], State[S, C, E, R]) -> Int
 pub fn[S, C, E, R] Protocol::order(Self[S, C, E, R]) -> CommandOrder[C]
 pub fn[S : ToJson + @json.FromJson, C : Eq + @json.FromJson, E : ToJson + @json.FromJson, R : ToJson + @json.FromJson] Protocol::restore(Self[S, C, E, R], Json) -> State[S, C, E, R] raise ProtocolError
+pub fn[S : ToJson + @json.FromJson, C : Eq + @json.FromJson, E : ToJson + @json.FromJson, R : ToJson + @json.FromJson] Protocol::restore_bytes(Self[S, C, E, R], BytesView) -> State[S, C, E, R] raise ProtocolError
 pub fn[S : ToJson, C : Eq, E : ToJson, R : ToJson] Protocol::restore_snapshot(Self[S, C, E, R], Snapshot[S, C, E, R]) -> State[S, C, E, R] raise ProtocolError
 pub fn[S : ToJson, C : ToJson, E : ToJson, R : ToJson] Protocol::snapshot(Self[S, C, E, R], State[S, C, E, R]) -> Json
+pub fn[S : ToJson, C : ToJson, E : ToJson, R : ToJson] Protocol::snapshot_bytes(Self[S, C, E, R], State[S, C, E, R]) -> Bytes
 pub fn[S, C, E, R] Protocol::snapshot_of(Self[S, C, E, R], State[S, C, E, R]) -> Snapshot[S, C, E, R]
 pub fn[S, C : ToJson, E, R] Protocol::state_hash(Self[S, C, E, R], State[S, C, E, R]) -> String
 pub fn[S, C : Eq, E, R] Protocol::states_equal(Self[S, C, E, R], State[S, C, E, R], State[S, C, E, R]) -> Bool
@@ -351,11 +393,11 @@ pub impl ToJson for PublicKey
 pub impl @json.FromJson for PublicKey
 
 pub struct QuorumFinalizer {
-  hasher : &Hasher
+  hashing : Hashing
   verifier : &Verifier
   roster : QuorumRoster
 }
-pub fn QuorumFinalizer::new(&Hasher, &Verifier, QuorumRoster) -> Self
+pub fn QuorumFinalizer::new(Hashing, &Verifier, QuorumRoster) -> Self
 pub fn QuorumFinalizer::roster(Self) -> QuorumRoster
 pub fn QuorumFinalizer::verify_base_vote(Self, BaseVote) -> Bool
 pub fn QuorumFinalizer::verify_vote(Self, ClosureVote) -> Bool
@@ -392,7 +434,9 @@ pub fn[S : ToJson, C : Eq, E : ToJson, R : ToJson] ReplicatedDomain::propose(Sel
 pub fn[S, C, E, R] ReplicatedDomain::protocol(Self[S, C, E, R]) -> Protocol[S, C, E, R]
 pub fn[S, C, E, R] ReplicatedDomain::replica_id(Self[S, C, E, R]) -> String
 pub fn[S : ToJson + @json.FromJson, C : Eq + @json.FromJson, E : ToJson + @json.FromJson, R : ToJson + @json.FromJson] ReplicatedDomain::restore(Protocol[S, C, E, R], Json) -> Self[S, C, E, R] raise ProtocolError
+pub fn[S : ToJson + @json.FromJson, C : Eq + @json.FromJson, E : ToJson + @json.FromJson, R : ToJson + @json.FromJson] ReplicatedDomain::restore_bytes(Protocol[S, C, E, R], BytesView) -> Self[S, C, E, R] raise ProtocolError
 pub fn[S : ToJson, C : ToJson, E : ToJson, R : ToJson] ReplicatedDomain::snapshot(Self[S, C, E, R]) -> Json
+pub fn[S : ToJson, C : ToJson, E : ToJson, R : ToJson] ReplicatedDomain::snapshot_bytes(Self[S, C, E, R]) -> Bytes
 pub fn[S, C, E, R] ReplicatedDomain::state(Self[S, C, E, R]) -> State[S, C, E, R]
 pub fn[S, C : ToJson, E, R] ReplicatedDomain::state_hash(Self[S, C, E, R]) -> String
 
@@ -434,11 +478,11 @@ pub impl ToJson for Signature
 pub impl @json.FromJson for Signature
 
 pub struct SingleAuthorityFinalizer {
-  hasher : &Hasher
+  hashing : Hashing
   verifier : &Verifier
   authority : PublicKey
 }
-pub fn SingleAuthorityFinalizer::new(&Hasher, &Verifier, PublicKey) -> Self
+pub fn SingleAuthorityFinalizer::new(Hashing, &Verifier, PublicKey) -> Self
 pub impl Finalizer for SingleAuthorityFinalizer
 
 pub(all) struct Snapshot[S, C, E, R] {
@@ -494,11 +538,11 @@ pub(all) struct VoteTally {
 }
 
 pub struct Voter[C] {
-  hasher : &Hasher
+  hashing : Hashing
   signer : &Signer
   order : CommandOrder[C]
 }
-pub fn[C] Voter::new(&Hasher, &Signer, CommandOrder[C]) -> Self[C]
+pub fn[C] Voter::new(Hashing, &Signer, CommandOrder[C]) -> Self[C]
 pub fn[C] Voter::public_key(Self[C]) -> PublicKey
 pub fn[C] Voter::vote(Self[C], Int, String, Array[Envelope[C]]) -> ClosureVote
 pub fn[C] Voter::vote_base(Self[C], Int, String, String) -> BaseVote
@@ -512,13 +556,19 @@ pub impl JoinSemilattice for VoterSlot
 // Type aliases
 
 // Traits
+pub(open) trait Codec {
+  fn name(Self) -> String
+  fn encode(Self, Json) -> Bytes
+  fn decode(Self, BytesView) -> Json raise CodecError
+}
+
 pub(open) trait Finalizer {
   fn verify_closure(Self, ClosureCertificate) -> Bool
   fn verify_base(Self, BaseCertificate) -> Bool
 }
 
 pub(open) trait Hasher {
-  fn hash_string(Self, String) -> Digest
+  fn hash_bytes(Self, Bytes) -> Digest
 }
 
 pub(open) trait JoinSemilattice {

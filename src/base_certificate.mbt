@@ -33,18 +33,19 @@ pub fn BasePayload::of(certificate : BaseCertificate) -> BasePayload {
 }
 
 ///|
-pub fn BasePayload::message(self : BasePayload) -> String {
-  canonicalize({
+/// Domain-separated statement that base signatures cover.
+pub fn BasePayload::statement(self : BasePayload) -> Json {
+  {
     "domain": base_message_domain.to_json(),
     "next_tick": self.next_tick.to_json(),
     "decision_hash": self.decision_hash.to_json(),
     "state_hash": self.state_hash.to_json(),
-  })
+  }
 }
 
 ///|
-pub fn BasePayload::digest(self : BasePayload, hasher : &Hasher) -> Digest {
-  hasher.hash_string(self.message())
+pub fn BasePayload::digest(self : BasePayload, hashing : Hashing) -> Digest {
+  hashing.hash_bytes(hashing.codec.encode(self.statement()))
 }
 
 ///|
@@ -182,7 +183,7 @@ pub fn assemble_base_certificate(
     match slots.get(voter).unwrap() {
       BaseEquivocated => ()
       BaseVoted(vote) => {
-        let key = canonicalize(vote.payload().message().to_json())
+        let key = canonicalize(vote.payload().statement())
         match candidates.get(key) {
           Some(list) => list.push(vote)
           None => candidates[key] = [vote]

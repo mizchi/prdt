@@ -20,8 +20,13 @@ TDD（探索 → Red → Green → Refactoring）で開発し、関心の分離�
 依存方向は `worker -> mmo -> prdt -> contracts`、`runtime -> prdt`、`simulation -> {mmo, runtime, prdt}` のみ。
 `Domain` は protocol を参照してはならない。`alive` のような非単調条件を proposal 時の precondition にしない。
 
-JSON codec は `derive(ToJson, FromJson)` で得る（enum は `style="legacy"` の `$tag` 形式）。
+型の**形**は `derive(ToJson, FromJson)` で宣言する（enum は `style="legacy"` の `$tag` 形式）。
 手書きの `impl ToJson` / `impl FromJson` を増やさない。例外は `Digest` / `Signature` / `PublicKey` の newtype だけ。
+
+**バイト表現**は `Codec`（`json_codec` / `binary_codec`）が決める。転送・永続化・hash 対象の
+バイト列を作るコードは、直接 `canonicalize` や `stringify` を呼ばず `Hashing` / `Protocol` 経由にする。
+`Codec` を足すときは canonical（値が等しければ同一バイト列、キーは UTF-16 コード単位順）を満たすこと。
+replica の外に出ないプロセスローカルな鍵だけは canonical JSON のままでよい。
 
 最終確認ではルートで `moon info && moon fmt`、`moon check --target all`、`moon test` を実行する（両 module を対象にする）。
 `src/contracts` を変更した場合は `just prove`（または `just prove-local`）も実行する。
