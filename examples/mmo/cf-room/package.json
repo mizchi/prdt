@@ -17,7 +17,7 @@
     "deploy:dry": "wrangler deploy --dry-run"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "0.22.0",
+    "@cloudflare/vitest-pool-workers": "0.23.0",
     "@cloudflare/workers-types": "5.20260903.1",
     "@types/node": "26.4.0",
     "typescript": "7.0.2",
